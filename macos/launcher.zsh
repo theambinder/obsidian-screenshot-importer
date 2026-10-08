@@ -28,12 +28,12 @@ log() {
 }
 
 notify() {
-  /usr/bin/osascript -e "display notification \"$1\" with title \"Obsidian Screenshot Automation\"" >/dev/null 2>&1 || true
+  /usr/bin/osascript -e "display notification \"$1\" with title \"Obsidian Screenshot Importer\"" >/dev/null 2>&1 || true
 }
 
 dialog() {
   /usr/bin/osascript <<APPLESCRIPT
-display dialog "$1" buttons {$2} default button "$3" cancel button "$4" with title "Obsidian Screenshot Automation"
+display dialog "$1" buttons {$2} default button "$3" cancel button "$4" with title "Obsidian Screenshot Importer"
 return button returned of result
 APPLESCRIPT
 }

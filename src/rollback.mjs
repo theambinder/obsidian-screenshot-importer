@@ -55,7 +55,7 @@ export async function listRuns(config, options = {}) {
   };
 }
 
-export async function rollbackRun(config, runId) {
+export async function rollbackRun(config, runId, { onProgress = () => {} } = {}) {
   const runPath = runLogPath(config, runId);
   const run = await readJson(runPath, null);
   if (!run) throw new Error(`Run not found: ${runId}`);
@@ -75,14 +75,19 @@ export async function rollbackRun(config, runId) {
     removedArchiveRunDir: false,
     errors: [],
   };
-  const references = await noteReferences(config);
+  const items = [...(run.items || [])].reverse();
+  const progress = rollbackProgress(items, onProgress);
+  run.rollback = result;
+  await writeJson(runPath, run);
+  const references = await noteReferences(config, progress.message);
   // Undo newest items first: several folders can target the same note or attachment.
-  for (const item of [...(run.items || [])].reverse()) {
+  for (const item of items) {
     if (itemRollbackFinishedAt(item) || item.archiveTrash?.status || runArchiveTrashFinishedAt(run)) {
       result.skippedFolders.push(item.sourceFolderName);
+      progress.skip(item);
       continue;
     }
-    const itemResult = await rollbackItem(config, run, item, references);
+    const itemResult = await progress.process(item, (step) => rollbackItem(config, run, item, references, step));
     result.deletedFiles.push(...itemResult.deletedFiles);
     result.restoredFiles.push(...itemResult.restoredFiles);
     result.retainedFiles.push(...itemResult.retainedFiles);
@@ -109,7 +114,7 @@ export async function rollbackRun(config, runId) {
   return result;
 }
 
-export async function rollbackRunItem(config, runId, sourceFolderName) {
+export async function rollbackRunItem(config, runId, sourceFolderName, { onProgress = () => {} } = {}) {
   const runPath = runLogPath(config, runId);
   const run = await readJson(runPath, null);
   if (!run) throw new Error(`Run not found: ${runId}`);
@@ -120,14 +125,39 @@ export async function rollbackRunItem(config, runId, sourceFolderName) {
   if (run.rollback?.status === 'done' || item.rollback?.status === 'done') return item.rollback || run.rollback;
   if (item.archiveTrash?.status) throw new Error(`Run item source archive was moved to Trash: ${sourceFolderName}`);
 
-  const result = await rollbackItem(config, run, item, await noteReferences(config));
+  const progress = rollbackProgress([item], onProgress);
+  const references = await noteReferences(config, progress.message);
+  const result = await progress.process(item, (step) => rollbackItem(config, run, item, references, step));
   await writeJson(runPath, run);
   return result;
 }
 
-async function noteReferences(config) {
+function rollbackProgress(items, onProgress) {
+  const units = (item) => (item.generatedFiles?.length || 0) + 2;
+  const totalFiles = items.reduce((sum, item) => sum + units(item), 0);
+  let doneFiles = 0;
+  const message = (current) => onProgress({ totalFiles, doneFiles, current });
+  message('Rollback: preparing reference checks...');
+  return {
+    message,
+    skip(item) { doneFiles += units(item); message(`Rollback: skipped ${item.sourceFolderName}`); },
+    async process(item, operation) {
+      const end = doneFiles + units(item);
+      message(`Rollback: ${item.sourceFolderName}`);
+      try {
+        return await operation((current) => { doneFiles += 1; message(current); });
+      } finally {
+        doneFiles = end;
+        message(`Rollback: processed ${item.sourceFolderName}`);
+      }
+    },
+  };
+}
+
+async function noteReferences(config, onMessage = () => {}) {
   const references = new Map();
   for (const category of config.mediaDirs) {
+    onMessage(`Rollback: checking references in ${category}...`);
     for (const note of await listFilesRecursive(path.join(config.mediaRoot, category))) {
       if (note.toLowerCase().endsWith('.md')) references.set(note, await fs.readFile(note, 'utf8'));
     }
@@ -135,7 +165,7 @@ async function noteReferences(config) {
   return references;
 }
 
-async function rollbackItem(config, run, item, references) {
+async function rollbackItem(config, run, item, references, step = () => {}) {
   const { runId } = run;
   const { sourceFolderName } = item;
 
@@ -191,9 +221,10 @@ async function rollbackItem(config, run, item, references) {
     return result;
   }
 
+  step(`Rollback: updated note for ${sourceFolderName}`);
   for (const generated of item.generatedFiles || []) {
-    if (result.deletedFiles.includes(generated) || result.restoredFiles.includes(generated) || result.retainedFiles.includes(generated)) continue;
     try {
+      if (result.deletedFiles.includes(generated) || result.restoredFiles.includes(generated) || result.retainedFiles.includes(generated)) continue;
       const filePath = fromVaultRelative(config, generated);
       await assertRealInside(config.vaultRoot, filePath);
       const replacement = (item.replacedFiles || []).find((entry) => entry.path === generated);
@@ -219,6 +250,8 @@ async function rollbackItem(config, run, item, references) {
       await checkpoint();
     } catch (error) {
       result.errors.push({ type: 'generatedFile', path: generated, error: error.message });
+    } finally {
+      step(`Rollback: ${sourceFolderName} / ${path.basename(generated)}`);
     }
   }
 

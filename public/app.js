@@ -1,4 +1,4 @@
-import { nextFolderSort, sortFolders, setNoteFoldersEnabled, selectFolderRange } from './folderTable.js';
+import { nextFolderSort, sortFolders, setNoteFoldersEnabled, setNoteFoldersMode, selectFolderRange } from './folderTable.js';
 import { normalizeTheme, resolveTheme } from './theme.js';
 import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicateEpisodes } from './episodeSelection.js';
 import { createTabScroll } from './tabScroll.js';
@@ -19,6 +19,9 @@ const state = {
   noteValues: new Map(),
   qualityByNotePath: new Map(),
   jobTimer: null,
+  activeJobId: null,
+  busy: false,
+  archiveCanTrash: false,
   lastCheckboxIndex: null,
   openRunIds: new Set(),
   preview: {
@@ -40,7 +43,7 @@ const $ = (selector) => document.querySelector(selector);
 
 const els = {
   archiveSummary: $('#archiveSummary'),
-  attachmentsTemplate: $('#attachmentsTemplate'),
+  imageFolderInput: $('#imageFolderInput'),
   clearArchiveButton: $('#clearArchiveButton'),
   clearSelectionButton: $('#clearSelectionButton'),
   closeModalButton: $('#closeModalButton'),
@@ -129,6 +132,18 @@ els.previewEffortSelect.addEventListener('change', handlePreviewEncoderChange);
 els.previewSuggestedQualityButton.addEventListener('click', useSuggestedPreviewQuality);
 els.qualityInput.addEventListener('change', syncDefaultQuality);
 els.qualityDefaultsFields.addEventListener('input', handleQualityDefaultInput);
+$('#saveImageFolderButton').addEventListener('click', async () => {
+  const previous = state.settings.imageFolderTemplate;
+  state.settings.imageFolderTemplate = els.imageFolderInput.value;
+  try {
+    const settings = await saveSettings();
+    state.settings.imageFolderTemplate = settings.imageFolderTemplate;
+    els.imageFolderInput.value = settings.imageFolderTemplate;
+  } catch (error) {
+    state.settings.imageFolderTemplate = previous;
+    showFatal(error);
+  }
+});
 $('#parallelImagesSelect').addEventListener('change', (event) => {
   state.settings.parallelImages = Number(event.target.value);
   scheduleSettingsSave();
@@ -204,8 +219,13 @@ function renderFolderSort() {
 
 async function initialize() {
   await loadSettings();
+  const { job } = await api('/api/active-job');
+  if (job) {
+    setProgress(job);
+    pollJob(job.id);
+  }
   await Promise.all([
-    scan(),
+    scan({ preserveProgress: Boolean(job) }),
     loadRuns(),
   ]);
 }
@@ -237,23 +257,28 @@ function setTab(tab, options) {
   if (changed && tab === 'history') loadRuns().catch(showFatal);
 }
 
-async function scan() {
-  setBusy(true, 'Scanning...');
-  const data = await api('/api/scan');
-  state.config = data.config;
-  state.screenshotsSummary = data.screenshotsSummary || null;
-  state.notes = data.notes;
-  state.folders = data.folders.map((folder) => ({
-    ...folder,
-    enabled: false,
-    ...initialQualityForFolder(folder),
-  }));
-  state.lastCheckboxIndex = null;
-  renderPaths();
-  buildNoteIndex();
-  renderFolders();
-  setProgress({ percent: 0, doneFiles: 0, totalFiles: 0, status: 'ready' });
-  setBusy(false);
+async function scan({ preserveProgress = false } = {}) {
+  if (state.activeJobId && !preserveProgress) return;
+  const ownsBusy = !state.busy;
+  if (ownsBusy) setBusy(true, 'Scanning...');
+  try {
+    const data = await api('/api/scan');
+    state.config = data.config;
+    state.screenshotsSummary = data.screenshotsSummary || null;
+    state.notes = data.notes;
+    state.folders = data.folders.map((folder) => ({
+      ...folder,
+      enabled: false,
+      ...initialQualityForFolder(folder),
+    }));
+    state.lastCheckboxIndex = null;
+    renderPaths();
+    buildNoteIndex();
+    renderFolders();
+    if (!preserveProgress) setProgress({ percent: 0, doneFiles: 0, totalFiles: 0, status: 'ready' });
+  } finally {
+    if (ownsBusy) setBusy(false);
+  }
 }
 
 function renderPaths() {
@@ -261,7 +286,7 @@ function renderPaths() {
   els.screenshotsPath.textContent = state.config.screenshotsRoot;
   els.vaultPath.textContent = state.config.vaultRoot;
   els.mediaPath.textContent = state.config.mediaRoot;
-  els.attachmentsTemplate.textContent = state.config.attachmentsTemplate;
+  els.imageFolderInput.value = state.settings.imageFolderTemplate || state.config.attachmentsTemplate;
 }
 
 async function loadSettings() {
@@ -306,13 +331,14 @@ function scheduleSettingsSave() {
 }
 
 async function saveSettings() {
-  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, theme: normalizeTheme(state.settings.theme) });
+  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
   state.settingsSave = state.settingsSave.catch(() => {}).then(() => api('/api/settings', {
     method: 'POST',
     body,
   }));
-  await state.settingsSave;
-  setStatusText('Settings saved');
+  const settings = await state.settingsSave;
+  if (!state.busy) setStatusText('Settings saved');
+  return settings;
 }
 
 function initialQualityForFolder(folder) {
@@ -408,7 +434,7 @@ function renderFolderRows() {
   state.visibleFolders = sortFolders(state.folders, state.folderSort, state.notes);
   renderSelectionSummary();
   if (state.folders.length === 0) {
-    els.foldersBody.innerHTML = '<tr><td colspan="6" class="empty">No screenshot folders found</td></tr>';
+    els.foldersBody.innerHTML = '<tr><td colspan="7" class="empty">No screenshot folders found</td></tr>';
     return;
   }
 
@@ -422,7 +448,7 @@ function renderFolderRows() {
       <td class="use-cell" title="Double-click to select or clear all folders for this note">
         <input class="enabled-input" type="checkbox" ${folder.enabled ? 'checked' : ''} aria-label="Use ${escapeAttr(folder.name)}">
       </td>
-      <td>
+      <td class="folder-cell">
         <div class="source-line">
           <div class="source-name">${escapeHtml(folder.name)}</div>
           <button class="icon-button preview-folder" type="button" title="Preview compression" aria-label="Preview compression">◐</button>
@@ -430,7 +456,8 @@ function renderFolderRows() {
         </div>
         <div class="source-meta">${escapeHtml(formatFolderMeta(folder))}</div>
       </td>
-      <td>
+      <td class="size-cell" data-label="Size">${escapeHtml(formatBytes(folder.totalBytes || 0))}</td>
+      <td class="note-cell">
         <div class="note-picker">
           <div class="note-control">
             <input class="note-input" value="${escapeAttr(valueForPath(folder.selectedNotePath))}" placeholder="Search note" autocomplete="off">
@@ -449,16 +476,16 @@ function renderFolderRows() {
           </div>
         </div>
       </td>
-      <td>
+      <td class="quality-cell">
         <input class="row-quality-input" type="number" min="1" max="100" value="${escapeAttr(qualityValue(folder))}" aria-label="Quality for ${escapeAttr(folder.name)}" title="${escapeAttr(qualityTitle(folder))}">
       </td>
-      <td>
-        <select class="mode-select">
+      <td class="mode-cell">
+        <select class="mode-select" title="${escapeAttr(folder.modeReason || 'Mode for this note')}">
           <option value="episode" ${folder.mode === 'episode' ? 'selected' : ''}>Episode</option>
           <option value="screenshots" ${folder.mode !== 'episode' ? 'selected' : ''}>Work</option>
         </select>
       </td>
-      <td>
+      <td class="episode-cell">
         <div class="episode-fields">
           <input class="season-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${isEpisodeMode ? folder.parsed.season ?? '' : ''}" aria-label="Season" ${isEpisodeMode ? '' : 'disabled'}>
           <input class="episode-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${isEpisodeMode ? folder.parsed.episode ?? '' : ''}" aria-label="Episode" ${isEpisodeMode ? '' : 'disabled'}>
@@ -517,8 +544,12 @@ function renderFolderRows() {
       }
     });
     tr.querySelector('.mode-select').addEventListener('change', (event) => {
-      folder.mode = event.target.value;
-      if (folder.mode === 'episode' && folder.parsed.season == null) folder.parsed.season = 1;
+      const mode = event.target.value;
+      for (const candidate of setNoteFoldersMode(state.folders, folder, mode)) candidate.modeReason = 'Saved mode for this note';
+      if (folder.selectedNotePath) {
+        state.settings.noteModes = { ...state.settings.noteModes, [folder.selectedNotePath]: mode };
+        scheduleSettingsSave();
+      }
       renderFolders();
     });
     tr.querySelector('.season-input').addEventListener('input', (event) => {
@@ -561,7 +592,6 @@ function renderSelectionSummary() {
 function formatFolderMeta(folder) {
   const parts = [
     formatUnit(folder.imageCount, 'file'),
-    folder.totalSize || formatBytes(folder.totalBytes || 0),
   ];
   if (folder.latestMtimeMs) parts.push(formatDate(folder.latestMtimeMs));
   return parts.join(' · ');
@@ -631,6 +661,10 @@ function applyNoteToFolder(folder, note, reason) {
   folder.selectedNoteLabel = note.label;
   folder.enabled = true;
   folder.matchReason = reason || 'manual';
+  if (state.settings.noteModes?.[note.path]) {
+    setNoteFoldersMode([folder], folder, state.settings.noteModes[note.path]);
+    folder.modeReason = 'Saved mode for this note';
+  }
   if (state.qualityByNotePath.has(note.path)) {
     folder.quality = state.qualityByNotePath.get(note.path);
     folder.qualityOverride = true;
@@ -947,6 +981,7 @@ function setPreviewLink(link, href) {
 }
 
 async function clearArchive() {
+  if (state.busy) return;
   if (!confirm('Move all archived source folders to macOS Trash?')) return;
   setBusy(true, 'Moving archive to Trash...');
   try {
@@ -1032,7 +1067,7 @@ function collectPayload() {
 }
 
 async function runSelected() {
-  if ($('#duplicateEpisodeDialog').open) return;
+  if (state.busy || $('#duplicateEpisodeDialog').open) return;
   const payload = collectPayload();
   if (payload.items.length === 0) {
     setStatusText('Nothing selected');
@@ -1051,6 +1086,8 @@ async function runSelected() {
   }
 
   setBusy(true, 'Running...');
+  setProgress({ status: 'queued', percent: 0, current: 'Import: preparing...' });
+  await window.flushAppSettings();
   const { jobId } = await api('/api/run', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -1076,27 +1113,45 @@ function confirmDuplicateEpisodes(groups) {
 
 function pollJob(jobId) {
   clearTimeout(state.jobTimer);
+  state.activeJobId = jobId;
+  setBusy(true);
   const poll = async () => {
+    let job;
     try {
-      const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-      setProgress(job);
-      if (['done', 'partial', 'error'].includes(job.status)) {
-        state.jobTimer = null;
-        setBusy(false);
-        await loadRuns();
-        showDoneModal(job.results || []);
-        await scan();
-        if (job.error) setStatusText(job.error);
-        return;
-      }
-      state.jobTimer = setTimeout(poll, 900);
+      job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
     } catch (error) {
-      state.jobTimer = null;
-      setBusy(false);
-      showFatal(error);
+      // A failed progress request does not mean the filesystem operation stopped.
+      setStatusText(`Operation still active · Reconnecting to progress: ${error.message}`);
+      state.jobTimer = setTimeout(poll, 2000);
+      return;
     }
+    setProgress(job);
+    if (['done', 'partial', 'error'].includes(job.status)) {
+      state.jobTimer = null;
+      try {
+        await loadRuns();
+        await scan({ preserveProgress: true });
+        setProgress(job);
+        if (job.kind === 'rollback' && job.result) {
+          const result = job.sourceFolderName ? {
+            ...job.result,
+            returnedFolders: job.result.returnedFolder ? [job.sourceFolderName] : [],
+            restoredNotes: job.result.removedMarkdownBlock ? [job.sourceFolderName] : [],
+          } : job.result;
+          showRollbackModal({ runId: job.runId }, result);
+        } else if (job.kind !== 'rollback') showDoneModal(job.results || []);
+        if (job.error) setStatusText(job.error);
+      } catch (error) {
+        setStatusText(`Operation ${job.status}; refresh failed: ${error.message}`);
+      } finally {
+        state.activeJobId = null;
+        setBusy(false);
+      }
+      return;
+    }
+    state.jobTimer = setTimeout(poll, 500);
   };
-  state.jobTimer = setTimeout(poll, 900);
+  state.jobTimer = setTimeout(poll, 0);
 }
 
 function setProgress(job) {
@@ -1108,7 +1163,8 @@ function setProgress(job) {
     return;
   }
   const eta = job.etaSeconds == null ? '' : ` · ETA ${formatDuration(job.etaSeconds)}`;
-  els.progressText.textContent = `${formatCount(job.doneFiles || 0)}/${formatCount(job.totalFiles || 0)} · ${percent}%${eta}`;
+  const unit = job.kind === 'rollback' ? ' steps' : '';
+  els.progressText.textContent = `${formatCount(job.doneFiles || 0)}/${formatCount(job.totalFiles || 0)}${unit} · ${percent}%${eta}`;
   els.currentText.textContent = job.error || job.current || '';
 }
 
@@ -1145,7 +1201,7 @@ function showRollbackModal(run, result) {
   els.doneModalBody.innerHTML = `
     <div class="result-summary">
       <div class="result-title">${escapeHtml(formatDate(result.finishedAt) || 'Rollback complete')}</div>
-      <div class="result-meta">${escapeHtml(formatRunTitle(run))}</div>
+      <div class="result-meta">${escapeHtml(run.startedAt ? formatRunTitle(run) : `Run ${run.runId}`)}</div>
       ${errors.length ? `<div class="result-meta">${formatUnit(errors.length, 'error')}</div>` : ''}
     </div>
     <div class="modal-items">
@@ -1192,7 +1248,8 @@ function renderRuns(data) {
     ? `Showing latest ${formatCount(data.limit)} of ${formatCount(data.total)}`
     : `${formatCount(data.total || 0)} total`;
   els.archiveSummary.textContent = `Archive: ${formatUnit(archive.fileCount || 0, 'file')} · ${formatBytes(archive.bytes || 0)}`;
-  els.clearArchiveButton.disabled = !archive.fileCount && Number(archive.folderCount || 0) <= 1;
+  state.archiveCanTrash = Boolean(archive.fileCount || Number(archive.folderCount || 0) > 1);
+  updateBusyControls();
 
   if (!runs.length) {
     els.runsList.innerHTML = '<div class="empty">Run log is empty</div>';
@@ -1234,38 +1291,12 @@ function renderRuns(data) {
       toggle.title = expanded ? 'Collapse run' : 'Expand run';
     });
     card.querySelector('.rollback-run')?.addEventListener('click', async () => {
+      if (state.busy) return;
       if (!confirm(`Rollback ${run.runId}?`)) return;
-      const total = rollbackProgressTotal(run);
-      setBusy(true, 'Rolling back...');
-      setProgress({
-        status: 'running',
-        percent: 0,
-        doneFiles: 0,
-        totalFiles: total,
-        current: `Rolling back ${formatRunTitle(run)}...`,
-      });
-      try {
-        const result = await api('/api/rollback', {
-          method: 'POST',
-          body: JSON.stringify({ runId: run.runId }),
-        });
-        await loadRuns();
-        await scan();
-        setProgress({
-          status: result.status,
-          percent: 100,
-          doneFiles: total,
-          totalFiles: total,
-          current: `Rollback ${result.status}`,
-        });
-        showRollbackModal(run, result);
-      } catch (error) {
-        showFatal(error);
-      } finally {
-        setBusy(false);
-      }
+      await startRollback(run.runId);
     });
     card.querySelector('.trash-run-archive')?.addEventListener('click', async () => {
+      if (state.busy) return;
       if (!confirm(`Move archived source folders for ${formatDate(run.startedAt)} to macOS Trash?`)) return;
       setBusy(true, 'Moving run archive to Trash...');
       try {
@@ -1286,28 +1317,15 @@ function renderRuns(data) {
     });
     card.querySelectorAll('.rollback-item').forEach((button) => {
       button.addEventListener('click', async () => {
+        if (state.busy) return;
         const sourceFolderName = button.dataset.sourceFolderName;
         if (!confirm(`Rollback ${sourceFolderName}?`)) return;
-        setBusy(true, 'Rolling back item...');
-        try {
-        const result = await api('/api/rollback-item', {
-          method: 'POST',
-          body: JSON.stringify({ runId: run.runId, sourceFolderName }),
-        });
-        setBusy(false);
-        setStatusText(`Item rollback: ${result.status}`);
-        await loadRuns();
-        await scan();
-        setStatusText(result.errors?.length ? result.errors.map((error) => error.error).join('; ') : `Item rollback: ${result.status}`);
-        } catch (error) {
-          showFatal(error);
-        } finally {
-          setBusy(false);
-        }
+        await startRollback(run.runId, sourceFolderName);
       });
     });
     card.querySelectorAll('.trash-item-archive').forEach((button) => {
       button.addEventListener('click', async () => {
+        if (state.busy) return;
         const sourceFolderName = button.dataset.sourceFolderName;
         if (!confirm(`Move archived source folder "${sourceFolderName}" to macOS Trash?`)) return;
         setBusy(true, 'Moving source folder to Trash...');
@@ -1337,6 +1355,22 @@ function renderRuns(data) {
       });
     });
     els.runsList.append(card);
+  }
+  updateBusyControls();
+}
+
+async function startRollback(runId, sourceFolderName) {
+  if (state.busy) return;
+  setBusy(true, 'Rollback: preparing...');
+  setProgress({ kind: 'rollback', status: 'queued', percent: 0, current: 'Rollback: preparing...' });
+  try {
+    const { jobId } = await api(sourceFolderName ? '/api/rollback-item' : '/api/rollback', {
+      method: 'POST',
+      body: JSON.stringify({ runId, sourceFolderName, background: true }),
+    });
+    pollJob(jobId);
+  } catch (error) {
+    showFatal(error);
   }
 }
 
@@ -1435,10 +1469,6 @@ function summarizeResults(results) {
   };
 }
 
-function rollbackProgressTotal(run) {
-  return Math.max(1, Number(run.generatedCount || 0) + Number(run.itemCount || 0));
-}
-
 function summarizeVisibleFolders() {
   return {
     folderCount: state.folders.length,
@@ -1522,9 +1552,19 @@ function statusLabel(kind) {
 }
 
 function setBusy(isBusy, text = '') {
-  els.scanButton.disabled = isBusy;
-  els.runButton.disabled = isBusy;
+  state.busy = isBusy || Boolean(state.activeJobId);
+  updateBusyControls();
   if (text) setStatusText(text);
+}
+
+function updateBusyControls() {
+  els.scanButton.disabled = state.busy;
+  els.runButton.disabled = state.busy;
+  els.clearArchiveButton.disabled = state.busy || !state.archiveCanTrash;
+  $('#desktopLocationsButton').disabled = state.busy;
+  for (const button of els.runsList.querySelectorAll('.rollback-run, .rollback-item, .trash-run-archive, .trash-item-archive')) {
+    button.disabled = state.busy;
+  }
 }
 
 function setStatusText(text) {

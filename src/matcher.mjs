@@ -37,6 +37,25 @@ export function parseSourceName(folderName) {
     return finalizeParsed(parsed);
   }
 
+  match = compact.match(/\bSeason[ ._-]*(\d{1,2})(?:[ ._-]+(?:Episode|Ep)[ ._-]*|\s*[-:]\s*)(\d{1,3})\b/i);
+  if (match) {
+    applyEpisode(match[1], match[2], 'Season - episode', match.index);
+    return finalizeParsed(parsed);
+  }
+
+  match = compact.match(/\b(\d{1,2})x(\d{1,3})\b/i);
+  if (match) {
+    applyEpisode(match[1], match[2], 'season x episode', match.index);
+    return finalizeParsed(parsed);
+  }
+
+  match = compact.match(/\b(?:Episode|Ep)[ ._-]*(\d{1,3})\b/i);
+  if (match) {
+    const season = compact.slice(0, match.index).match(/\b(?:Season[ ._-]*|S)(\d{1,2})\b/i);
+    applyEpisode(season?.[1] ?? 1, match[1], 'named episode', season?.index ?? match.index);
+    return finalizeParsed(parsed);
+  }
+
   match = compact.match(/\(S(\d{1,2})\).*?[-_.\s]+(\d{1,3})(?=[^\d]|$)/i);
   if (match) {
     applyEpisode(match[1], match[2], '(Sxx) - episode', match.index);

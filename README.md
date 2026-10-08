@@ -4,17 +4,20 @@ Import screenshots and images into Obsidian media notes with automatic matching,
 episode organization, image compression, and rollback support.
 
 A standalone macOS app for reviewing batches before adding them to your vault.
-Images can come from any player, game, or other source; IINA is optional.
+Images can come from any player, game, or other source.
 
 [Download](https://github.com/theambinder/obsidian-screenshot-importer/releases/latest)
 · [Changelog](CHANGELOG.md) · [Русский](README.ru.md)
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/ambinder)
+· [Sponsor](https://buymeacoffee.com/ambinder)
 
 ## Get Started
 
 Requires **Apple Silicon (M1 or later)** and **macOS 13.5 or later**.
 
 1. Download the Apple Silicon ZIP from [Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases).
-2. Extract it in Downloads and move **Obsidian Screenshot Automation.app** to Applications.
+2. Extract it in Downloads and move **Obsidian Screenshot Importer.app** to Applications.
 3. Open the app and select your folders in **Settings > Choose Folders...**:
    screenshots, Obsidian vault, Media, and history/settings.
 4. Review the suggested notes and episodes, select folders, and press **Run**.
@@ -30,16 +33,18 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 
 - Scan source subfolders and suggest matching notes. Search by category and title,
   correct matches, and reuse saved mappings across similar folders.
-- Detect seasons and episodes, including episode zero. Keep episodes in numeric
+- Detect seasons and episodes, including episode zero. Change Work/Episode for all
+  folders sharing a Note, with remembered per-note mode and individual number detection. Keep episodes in numeric
   order, reuse padded/commented headings, and preserve existing note text.
 - Convert to WebP, JPEG, PNG, or keep originals. Preserve filenames and dimensions;
   preview original/converted images and detail crops before applying quality.
 - Set category defaults and per-note quality; convert batches in parallel.
 - Insert Obsidian embeds into the correct work or episode section and place images
-  in `All Notes/Attachments/{notename}/`.
+  in the configurable **Settings > Image Folder** (default `All Notes/Attachments/{notename}/`).
 - Review run summaries, compression savings, and archived sources. Roll back a
-  whole run or one folder, or send checked archives to the macOS Trash.
-- Select matching notes in bulk, sort the table, and use system/light/dark themes.
+  whole run or one folder with live progress, or send checked archives to the macOS Trash.
+  A second mutation cannot start while rollback is running; progress survives tab changes and page reloads.
+- Select matching notes in bulk, sort by Folder, Size, Note, Season, or Episode, and use system/light/dark themes.
   Each section remembers its own scroll position during the session.
 - Preserve note creation dates on macOS while updating modification dates.
 

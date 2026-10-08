@@ -1,7 +1,7 @@
 import { parseSeasonNumber, parseEpisodeNumber } from './episodeSelection.js';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const sortKeys = new Set(['source', 'note', 'season', 'episode']);
+const sortKeys = new Set(['source', 'size', 'note', 'season', 'episode']);
 
 export function nextFolderSort(current, key) {
   if (!sortKeys.has(key)) return null;
@@ -14,6 +14,7 @@ export function sortFolders(folders, sort, notes = []) {
   const noteNames = new Map(notes.map((note) => [note.path, note.noteName || note.label]));
   const value = (folder) => {
     if (sort.key === 'source') return folder.name;
+    if (sort.key === 'size') return Number.isFinite(folder.totalBytes) ? folder.totalBytes : null;
     if (sort.key === 'note') return folder.selectedNotePath
       ? noteNames.get(folder.selectedNotePath) || folder.selectedNoteLabel || folder.selectedNotePath
       : null;
@@ -35,6 +36,20 @@ export function setNoteFoldersEnabled(folders, source, enabled) {
   for (const folder of folders) {
     if (folder.selectedNotePath === source.selectedNotePath) folder.enabled = enabled;
   }
+}
+
+export function setNoteFoldersMode(folders, source, mode) {
+  const group = source.selectedNotePath
+    ? folders.filter((folder) => folder.selectedNotePath === source.selectedNotePath)
+    : [source];
+  for (const folder of group) {
+    folder.mode = mode;
+    if (mode !== 'episode') continue;
+    const detected = folder.detectedEpisode || folder.parsed;
+    folder.parsed.season = parseSeasonNumber(folder.parsed.season) ?? parseSeasonNumber(detected?.season) ?? 1;
+    folder.parsed.episode = parseEpisodeNumber(folder.parsed.episode) ?? parseEpisodeNumber(detected?.episode);
+  }
+  return group;
 }
 
 export function selectFolderRange(folders, index, anchor, enabled) {

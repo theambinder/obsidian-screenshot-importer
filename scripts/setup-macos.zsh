@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-APP_DIR="${PROJECT_DIR}/macos/Obsidian Screenshot Automation.app"
+APP_DIR="${PROJECT_DIR}/macos/Obsidian Screenshot Importer.app"
 APP_EXE="${APP_DIR}/Contents/MacOS/ObsidianScreenshotAutomation"
 WRAPPER_SOURCE="${PROJECT_DIR}/macos/launcher-wrapper.c"
 LAUNCHER_SOURCE="${PROJECT_DIR}/macos/launcher.zsh"
@@ -169,7 +169,7 @@ print_versions() {
   printf '  ffmpeg: %s (%s)\n' "$(ffmpeg -version 2>&1 | head -n 1)" "$(command -v ffmpeg)"
 }
 
-info "Setting up Obsidian Screenshot Automation for macOS"
+info "Setting up Obsidian Screenshot Importer for macOS"
 info "Project: ${PROJECT_DIR}"
 
 install_homebrew_if_needed
@@ -183,4 +183,4 @@ rebuild_launcher
 run_smoke_test
 print_versions
 
-printf '\nDone. You can now open:\n%s\n' "${PROJECT_DIR}/macos/Obsidian Screenshot Automation.app"
+printf '\nDone. You can now open:\n%s\n' "${PROJECT_DIR}/macos/Obsidian Screenshot Importer.app"

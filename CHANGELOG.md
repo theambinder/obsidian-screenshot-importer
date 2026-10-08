@@ -4,6 +4,16 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.4.0 - 2026-10-08
+
+- Rename the native app, window, menus, web interface, and distribution to Obsidian Screenshot Importer. Retain legacy support paths and bundle identifiers so profiles and history survive the rename.
+- Apply Work/Episode changes to every folder with the same exact Note and remember the mode across scans and app sessions. Fill detected numbers separately for each folder, preserving manual values and E0; unknown episodes remain blank for review. Recognize Season N, named Episode/Ep, and NxE filename patterns; explain mode detection in the selector tooltip.
+- Track full-run and per-folder rollback as background jobs with live phases, step counts, ETA, completion results, and recovery after interface reload. Retry progress reads without unlocking actions or pretending the operation stopped. Block another import, rollback, or Trash operation until completion in both UI and backend.
+- Add editable Settings > Locations > Image Folder, a validated vault-relative template with optional {notename}. New imports use a settings snapshot; old output files and rollback journals remain untouched.
+- Rename Source to Folder and move folder size into its own sortable Size column, including compact-screen sorting.
+- Remove player-specific references from the public introduction and add Buy Me a Coffee / Sponsor links and GitHub funding metadata.
+- Add regression coverage for grouped modes, numeric size sorting, filename patterns, output validation/persistence, custom destinations, async rollback progress, discovery, exclusion, partial rollback, and note creation-date preservation.
+
 ## 1.3.1 - 2026-10-08
 
 - Prepare the complete project for the `obsidian-screenshot-importer` GitHub repository, with an English README, retained Russian guide, and development instructions.

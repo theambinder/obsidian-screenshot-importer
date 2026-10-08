@@ -2,9 +2,20 @@
 
 ## Portable Desktop Build (2026-09-18)
 
-Current release: **1.3.1**. `package.json` is authoritative; the build propagates it to Settings, About, bundle metadata, and the ZIP filename. See [CHANGELOG.md](CHANGELOG.md) for release history and [PERFORMANCE.md](PERFORMANCE.md) for size and conversion measurements. Bounded parallel encoding preserves sequential note/attachment/journal commits and all existing conflict policies.
+Current release: **1.4.0**. `package.json` is authoritative; the build propagates it to Settings, About, bundle metadata, and the ZIP filename. See [CHANGELOG.md](CHANGELOG.md) for release history and [PERFORMANCE.md](PERFORMANCE.md) for size and conversion measurements. Bounded parallel encoding preserves sequential note/attachment/journal commits and all existing conflict policies.
 
 Changelog policy: record every release in `CHANGELOG.md`. If this checkout has `AGENTS.local.md`, also follow its local Obsidian changelog policy while preserving existing note text and frontmatter. Never publish the local instructions or the private task note.
+
+### Grouped Modes, Output, and Rollback Jobs (1.4.0)
+
+- The visible product and distributable are Obsidian Screenshot Importer. Keep legacy support paths and bundle identifiers, as well as journal/Markdown identifiers, for backward compatibility. Replace the old app bundle while closed, not the user's data folder.
+- Work is the conservative fallback when the filename parser finds no supported episode pattern. A matched Series/Anime note alone is not proof of an episode number. The Mode tooltip explains detected versus saved mode. Season N - E, named Episode/Ep, and NxE formats complement SxxEyy and existing anime release formats.
+- Changing mode groups by exact nonempty Note path, never a fuzzy title. The source table's shared setNoteFoldersMode helper attempts each row's detected numbers, preserves edited values and E0, defaults only missing seasons to 1, and leaves unknown episodes null for user review. An unmatched row changes only itself. Both Episode and Work preferences persist per Note in settings.json/noteModes and apply on later scans and manual note selection. Category boundaries filter saved preferences.
+- Settings > Locations > Image Folder edits imageFolderTemplate, a vault-relative directory with optional {notename}. Validate before saving: no absolute path, traversal, unknown placeholder, or backslash. Import receives an immutable config snapshot using the saved template, with real-path containment checks. Changing the template does not relocate old images or alter their journal paths; rollback uses each run's recorded generatedFiles.
+- /api/rollback and /api/rollback-item accept background:true to create RollbackJob entries in the existing jobs registry; requests without it retain the synchronous API. /api/active-job discovers the active job after a page reload. Jobs report kind, run ID, optional folder, status, phase, done/total steps, ETA, result, and error. Steps cover a note check/update, each attachment, and source-folder return/finalization; counts include skipped or failed work as processed, not successful. Reference-index preparation is a visible phase before counted steps. Final status/result conveys failures independently of 100% processed.
+- The server transfers the exclusive mutation lock to a background job and releases it only in that job's finally handler. Any concurrent import, rollback, or archive deletion gets 409. The native busy check therefore waits for background rollback too. Frontend activeJobId owns busy state through polling, refreshes, completion results, and progress retries; changing tabs or rendering History never enables another destructive action. Failed polls do not mean a stopped job; retry while leaving progress/busy visible. On shutdown/restart jobs are not resumed automatically from memory: existing durable per-item journals allow a later explicit retry.
+- Folder replaces Source in the UI. Size is a separate numeric-sort column; mobile uses the same sort key/menu and an explicit size field. Empty/tied values retain existing sorting rules and reset restores scan order.
+- Public funding links use buymeacoffee.com/ambinder; .github/FUNDING.yml enables GitHub's Sponsor affordance. App runtime remains offline and does not load those assets.
 
 ### GitHub Repository (1.3.1)
 

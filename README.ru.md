@@ -1,6 +1,6 @@
 # Obsidian Screenshot Importer
 
-Локальное приложение для пакетного переноса скриншотов и изображений в заметки Obsidian. Источником может быть IINA, другой плеер, игра или любая папка с картинками.
+Локальное приложение для пакетного переноса скриншотов и изображений в заметки Obsidian. Источником может быть любой плеер, игра или папка с картинками.
 
 [English README](README.md) · [GitHub](https://github.com/theambinder/obsidian-screenshot-importer)
 
@@ -8,8 +8,8 @@
 
 Готовая автономная сборка для Apple Silicon и macOS 13.5+:
 
-- `dist/Obsidian Screenshot Automation.app`
-- `dist/Obsidian-Screenshot-Automation-1.3.1-Apple-Silicon.zip` для переноса на другой Mac. Готовая сборка доступна в [Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases).
+- `dist/Obsidian Screenshot Importer.app`
+- `dist/Obsidian-Screenshot-Importer-1.4.0-Apple-Silicon.zip` для переноса на другой Mac. Готовая сборка доступна в [Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases).
 
 Распакуй ZIP, перенеси приложение в Applications и открой двойным кликом. Node.js, Homebrew и конвертеры устанавливать не нужно. Закрытие главного окна или Cmd+Q останавливает сервис; выполняющаяся обработка сначала завершается.
 
@@ -44,7 +44,7 @@
 Старый launcher (требует исходники и установленные зависимости, не переносимая сборка):
 
 ```text
-macos/Obsidian Screenshot Automation.app
+macos/Obsidian Screenshot Importer.app
 ```
 
 Двойной клик запускает локальный сервис, открывает браузер и показывает маленькое окно с кнопками `Open App` и `Stop Service`. Когда закончил работу, нажми `Stop Service`.

@@ -40,8 +40,8 @@ fi
 
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/obsidian-screenshot-build.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
-RELEASE="$STAGING/Obsidian Screenshot Automation $VERSION"
-APP="$RELEASE/Obsidian Screenshot Automation.app"
+RELEASE="$STAGING/Obsidian Screenshot Importer $VERSION"
+APP="$RELEASE/Obsidian Screenshot Importer.app"
 RES="$APP/Contents/Resources"
 SOURCES="$STAGING/Sources"
 mkdir -p "$APP/Contents/MacOS" "$RES/bin" "$RES/app" "$RES/Licenses" "$SOURCES"
@@ -52,7 +52,7 @@ cp macos/DesktopInfo.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 /usr/bin/swiftc -swift-version 5 -O -target arm64-apple-macos13.5 \
   -module-cache-path "$ROOT/build/swift-cache" macos/DesktopApp.swift \
-  -o "$APP/Contents/MacOS/ObsidianScreenshotAutomation" -framework AppKit -framework WebKit
+  -o "$APP/Contents/MacOS/ObsidianScreenshotImporter" -framework AppKit -framework WebKit
 /usr/bin/swiftc -swift-version 5 -module-cache-path "$ROOT/build/swift-cache" macos/MakeIcon.swift -o "$STAGING/MakeIcon" -framework AppKit
 "$STAGING/MakeIcon" "$STAGING/AppIcon.iconset"
 /usr/bin/iconutil -c icns "$STAGING/AppIcon.iconset" -o "$RES/AppIcon.icns"
@@ -76,6 +76,7 @@ cp -R src public scripts tests "$SOURCES/"
 mkdir -p "$SOURCES/macos"
 cp macos/*.swift macos/*.c macos/*.plist macos/*.zsh "$SOURCES/macos/"
 cp package.json .gitignore .gitattributes AGENTS.md README.md README.ru.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$SOURCES/"
+cp -R .github "$SOURCES/"
 cp -R "$RES/Licenses" "$SOURCES/"
 /usr/bin/ditto -c -k --keepParent "$SOURCES" "$RELEASE/Sources-$VERSION.zip"
 cp PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$RELEASE/"
@@ -90,8 +91,8 @@ done
 for binary in "$RES/bin/"*; do /usr/bin/codesign --force --sign - "$binary"; done
 /usr/bin/codesign --force --sign - "$APP"
 /usr/bin/codesign --verify --deep --strict "$APP"
-if [[ -d "$ROOT/dist/Obsidian Screenshot Automation.app" ]]; then rm -rf "$ROOT/dist/Obsidian Screenshot Automation.app"; fi
-/usr/bin/ditto --noextattr "$APP" "$ROOT/dist/Obsidian Screenshot Automation.app"
-ZIP="$ROOT/dist/Obsidian-Screenshot-Automation-$VERSION-Apple-Silicon.zip"
+if [[ -d "$ROOT/dist/Obsidian Screenshot Importer.app" ]]; then rm -rf "$ROOT/dist/Obsidian Screenshot Importer.app"; fi
+/usr/bin/ditto --noextattr "$APP" "$ROOT/dist/Obsidian Screenshot Importer.app"
+ZIP="$ROOT/dist/Obsidian-Screenshot-Importer-$VERSION-Apple-Silicon.zip"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$RELEASE" "$ZIP"
 printf '\nBuilt: %s\n' "$ZIP"

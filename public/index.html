@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Obsidian Screenshot Automation</title>
+    <title>Obsidian Screenshot Importer</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <div id="stickyShell" class="sticky-shell">
       <header class="topbar">
         <div>
-          <h1>Obsidian Screenshot Automation</h1>
+          <h1>Obsidian Screenshot Importer</h1>
         </div>
         <nav class="tabs" aria-label="Sections">
           <button class="tab-button active" type="button" data-tab="screenshots">Screenshots</button>
@@ -45,8 +45,10 @@
           <div class="toolbar-actions">
             <select id="folderSortSelect" class="compact-sort" aria-label="Sort folders">
               <option value="">Scan order</option>
-              <option value="source:asc">Source ↑</option>
-              <option value="source:desc">Source ↓</option>
+              <option value="source:asc">Folder ↑</option>
+              <option value="source:desc">Folder ↓</option>
+              <option value="size:asc">Size ↑</option>
+              <option value="size:desc">Size ↓</option>
               <option value="note:asc">Note ↑</option>
               <option value="note:desc">Note ↓</option>
               <option value="season:asc">Season ↑</option>
@@ -67,6 +69,7 @@
             <colgroup>
               <col class="col-enabled">
               <col class="col-source">
+              <col class="col-size">
               <col class="col-note">
               <col class="col-quality">
               <col class="col-mode">
@@ -75,7 +78,8 @@
             <thead>
               <tr>
                 <th><span class="column-label">Use</span></th>
-                <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="source" data-sort-label="Source">Source <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="source" data-sort-label="Folder">Folder <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="size" data-sort-label="Size">Size <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="note" data-sort-label="Note">Note <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th><span class="column-label">Quality</span></th>
                 <th><span class="column-label">Mode</span></th>
@@ -84,7 +88,7 @@
             </thead>
             <tbody id="foldersBody">
               <tr>
-                <td colspan="6" class="empty">Scanning...</td>
+                <td colspan="7" class="empty">Scanning...</td>
               </tr>
             </tbody>
           </table>
@@ -195,8 +199,8 @@
               <dd id="vaultPath"></dd>
               <dt>Media</dt>
               <dd id="mediaPath"></dd>
-              <dt>Attachments</dt>
-              <dd id="attachmentsTemplate"></dd>
+              <dt><label for="imageFolderInput">Image Folder</label></dt>
+              <dd class="image-folder-control"><input id="imageFolderInput" type="text" aria-label="Image Folder" title="Folder relative to the Obsidian vault; {notename} inserts the note name" placeholder="All Notes/Attachments/{notename}"><button id="saveImageFolderButton" type="button">Save</button></dd>
             </dl>
           </section>
         </div>

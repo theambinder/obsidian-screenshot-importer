@@ -1,6 +1,8 @@
 import { readJson, writeJson } from './utils.mjs';
 import { normalizeParallelImages } from './conversionBatch.mjs';
 import { normalizeTheme } from '../public/theme.js';
+import { normalizeImageFolderTemplate } from './imageFolder.mjs';
+import { mediaNotePath } from './paths.mjs';
 
 const DEFAULT_QUALITY_BY_MEDIA_DIR = {
   Anime: 50,
@@ -34,12 +36,23 @@ function normalizeAppSettings(config, input = {}) {
     );
   }
 
+  const noteModes = {};
+  for (const [notePath, mode] of Object.entries(input.noteModes || {})) {
+    if (!['episode', 'screenshots'].includes(mode)) continue;
+    try {
+      mediaNotePath(config, notePath);
+      noteModes[notePath] = mode;
+    } catch { /* Ignore preferences outside the configured Media categories. */ }
+  }
+
   return {
     version: 1,
     mediaDirs: config.mediaDirs,
     qualityDefaults,
     parallelImages: normalizeParallelImages(input.parallelImages),
     theme: normalizeTheme(input.theme),
+    imageFolderTemplate: normalizeImageFolderTemplate(input.imageFolderTemplate ?? config.attachmentsTemplate ?? 'All Notes/Attachments/{notename}'),
+    noteModes,
   };
 }
 

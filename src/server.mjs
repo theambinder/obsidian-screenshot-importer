@@ -14,6 +14,7 @@ import { loadRules, rememberRule } from './rules.mjs';
 import { listRuns, rollbackRun, rollbackRunItem } from './rollback.mjs';
 import { scanScreenshotFolders } from './screenshotScanner.mjs';
 import { ImportJob } from './runner.mjs';
+import { RollbackJob } from './rollbackJob.mjs';
 import { convertImage, normalizeConversionSettings } from './converter.mjs';
 import { PreviewCache } from './previewCache.mjs';
 import { pathComponent, sourceFolderPath as checkedSourceFolderPath, assertRealInside } from './paths.mjs';
@@ -25,6 +26,7 @@ export function createAppServer(config = resolveConfig()) {
 const jobs = new Map();
 const previews = new PreviewCache();
 let mutationActive = false;
+let activeJobId = null;
 let pendingWrites = 0;
 let stopping = false;
 const exclusivePaths = new Set(['/api/run', '/api/rollback', '/api/rollback-item', '/api/archive/clear', '/api/archive/clear-run', '/api/archive/clear-item']);
@@ -60,7 +62,7 @@ async function handleApi(req, res, url) {
     sendJson(res, {
       ok: true,
       version: APP_VERSION,
-      config: publicConfig(),
+      config: { ...publicConfig(), attachmentsTemplate: (await loadAppSettings(config)).imageFolderTemplate },
       tools: {
         cwebp: await commandVersion('cwebp', ['-version']),
         ffmpeg: await commandVersion('ffmpeg', ['-version']),
@@ -83,20 +85,26 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === '/api/scan') {
-    const [notes, folders, rules] = await Promise.all([
+    const [notes, folders, rules, settings] = await Promise.all([
       scanMedia(config),
       scanScreenshotFolders(config),
       loadRules(config),
+      loadAppSettings(config),
     ]);
 
     const rows = folders.map((folder) => {
       const parsed = parseSourceName(folder.name);
       const match = suggestNotes(parsed, notes, rules);
-      const mode = inferMode(match.selected, parsed);
+      const savedMode = settings.noteModes[match.selected?.path];
+      const mode = savedMode || inferMode(match.selected, parsed);
+      const detectedEpisode = { season: parsed.season, episode: parsed.episode };
+      if (mode === 'episode' && parsed.season == null) parsed.season = 1;
       return {
         ...folder,
         parsed,
+        detectedEpisode,
         mode,
+        modeReason: savedMode ? 'Saved mode for this note' : parsed.mode === 'episode' ? `Detected: ${parsed.pattern}` : 'No episode pattern detected in the folder name',
         selectedNotePath: match.selected?.path || '',
         selectedNoteLabel: match.selected?.label || '',
         confidence: match.confidence,
@@ -111,7 +119,7 @@ async function handleApi(req, res, url) {
     });
 
     sendJson(res, {
-      config: publicConfig(),
+      config: { ...publicConfig(), attachmentsTemplate: settings.imageFolderTemplate },
       notes,
       folders: rows,
       screenshotsSummary: summarizeScreenshotFolders(folders),
@@ -121,22 +129,34 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/run' && req.method === 'POST') {
     const payload = await readBody(req);
-    if (payload.parallelImages == null) payload.parallelImages = (await loadAppSettings(config)).parallelImages;
-    const job = new ImportJob(config, payload);
+    const settings = await loadAppSettings(config);
+    if (payload.parallelImages == null) payload.parallelImages = settings.parallelImages;
+    const job = new ImportJob({ ...config, attachmentsTemplate: settings.imageFolderTemplate }, payload);
+    job.kind = 'import';
+    startJob(job);
+    sendJson(res, { jobId: job.id });
+    return true;
+  }
+
+  if (url.pathname === '/api/active-job' && req.method === 'GET') {
+    sendJson(res, { job: activeJobId ? { ...jobs.get(activeJobId).progress(), kind: jobs.get(activeJobId).kind } : null });
+    return;
+  }
+
+  function startJob(job) {
     jobs.set(job.id, job);
     for (const [id, previous] of jobs) {
       if (jobs.size <= 100) break;
       if (['done', 'partial', 'error'].includes(previous.status)) jobs.delete(id);
     }
     mutationActive = true;
+    activeJobId = job.id;
     queueMicrotask(() => {
       job.run().catch((error) => {
         job.status = 'error';
         job.error = error.stack || error.message;
-      }).finally(() => { mutationActive = false; });
+      }).finally(() => { mutationActive = false; activeJobId = null; });
     });
-    sendJson(res, { jobId: job.id });
-    return;
   }
 
   const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)$/);
@@ -146,7 +166,7 @@ async function handleApi(req, res, url) {
       sendJson(res, { error: 'Job not found' }, 404);
       return;
     }
-    sendJson(res, job.progress());
+    sendJson(res, { ...job.progress(), kind: job.kind });
     return;
   }
 
@@ -220,6 +240,12 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/rollback' && req.method === 'POST') {
     const payload = await readBody(req);
+    if (payload.background) {
+      const job = new RollbackJob(config, { runId: payload.runId });
+      startJob(job);
+      sendJson(res, { jobId: job.id });
+      return true;
+    }
     const result = await rollbackRun(config, payload.runId);
     sendJson(res, result);
     return;
@@ -227,6 +253,12 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/rollback-item' && req.method === 'POST') {
     const payload = await readBody(req);
+    if (payload.background) {
+      const job = new RollbackJob(config, payload);
+      startJob(job);
+      sendJson(res, { jobId: job.id });
+      return true;
+    }
     const result = await rollbackRunItem(config, payload.runId, payload.sourceFolderName);
     sendJson(res, result);
     return;
@@ -573,8 +605,8 @@ const server = http.createServer(async (req, res) => {
       ownsMutation = true;
     }
     if (url.pathname.startsWith('/api/')) {
-      await handleApi(req, res, url);
-      if (url.pathname === '/api/run') ownsMutation = false;
+      const detached = await handleApi(req, res, url);
+      if (detached === true) ownsMutation = false;
     } else {
       await serveStatic(req, res, url);
     }

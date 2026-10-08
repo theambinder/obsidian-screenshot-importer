@@ -14,7 +14,7 @@ import { resolveConfig } from '../src/config.mjs';
 import { APP_VERSION } from '../src/version.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const resources = path.join(projectRoot, 'dist/Obsidian Screenshot Automation.app/Contents/Resources');
+const resources = path.join(projectRoot, 'dist/Obsidian Screenshot Importer.app/Contents/Resources');
 const portableNode = path.join(resources, 'bin/node');
 
 async function fixture(t) {

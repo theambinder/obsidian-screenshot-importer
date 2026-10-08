@@ -7,9 +7,9 @@
   <key>CFBundleIdentifier</key>
   <string>local.ambinder.obsidian-screenshot-automation</string>
   <key>CFBundleName</key>
-  <string>Obsidian Screenshot Automation</string>
+  <string>Obsidian Screenshot Importer</string>
   <key>CFBundleDisplayName</key>
-  <string>Obsidian Screenshot Automation</string>
+  <string>Obsidian Screenshot Importer</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -21,6 +21,6 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSLocalNetworkUsageDescription</key>
-  <string>Runs a local web service on this Mac so the browser can open Obsidian Screenshot Automation at 127.0.0.1.</string>
+  <string>Runs a local web service on this Mac so the browser can open Obsidian Screenshot Importer at 127.0.0.1.</string>
 </dict>
 </plist>

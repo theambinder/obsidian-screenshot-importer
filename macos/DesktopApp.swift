@@ -19,12 +19,13 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private var statusPanel: NSPanel?
     private let locationKeys = ["screenshotsRoot", "vaultRoot", "mediaRoot", "dataDir"]
     private let locationLabels = ["Screenshots", "Obsidian Vault", "Media", "History & Settings"]
-    private let name = "Obsidian Screenshot Automation"
+    private let name = "Obsidian Screenshot Importer"
 
     private var supportURL: URL {
         if let path = ProcessInfo.processInfo.environment["OBSIDIAN_SCREENSHOTS_SUPPORT"] {
             return URL(fileURLWithPath: path)
         }
+        // Retain the legacy support path so renaming the app does not reset its profile.
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Obsidian Screenshot Automation")
     }
     private var profileURL: URL {
