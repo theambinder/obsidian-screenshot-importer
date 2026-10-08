@@ -10,7 +10,7 @@ This file is the public release history. Checkouts with a private `AGENTS.local.
 - Describe support for screenshots and images from any source; IINA remains optional.
 - Add configurable source-mode paths and port through environment variables, retaining legacy defaults and existing desktop profiles.
 - Generate the legacy macOS launcher from portable source templates so setup works from a fresh clone in any directory.
-- Exclude personal data, matching rules, settings, backups, logs, generated apps, fixtures, and build/release artifacts from Git. Companion source archives exclude precompiled legacy apps and private local documentation.
+- Exclude personal data, matching rules, settings, backups, logs, generated apps, fixtures, and build/release artifacts from Git. Companion source archives exclude precompiled legacy apps, private local documentation, and FFmpeg's environment-dumping configure log; include build flags instead.
 - Keep the full release history, requirements, audit, performance notes, build scripts, and third-party notices. Distribute the portable app through GitHub Releases.
 
 ## 1.3.0 - 2026-10-03

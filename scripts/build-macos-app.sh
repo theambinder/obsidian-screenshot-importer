@@ -70,7 +70,8 @@ cp build/vendor/libwebp-1.6.0/COPYING "$RES/Licenses/WebP.txt"
 cp build/vendor/libwebp-1.6.0/PATENTS "$RES/Licenses/WebP-PATENTS.txt"
 cp build/downloads/libwebp-1.6.0.tar.gz "$SOURCES/"
 cp build/downloads/ffmpeg-7.1.5.tar.xz "$SOURCES/"
-cp build/vendor/ffmpeg-7.1.5/ffbuild/config.log "$SOURCES/ffmpeg-config.log"
+# config.log contains the developer's full environment; distribute flags only.
+"$RES/bin/ffmpeg" -hide_banner -buildconf > "$SOURCES/ffmpeg-build-config.txt" 2>&1
 cp -R src public scripts tests "$SOURCES/"
 mkdir -p "$SOURCES/macos"
 cp macos/*.swift macos/*.c macos/*.plist macos/*.zsh "$SOURCES/macos/"
