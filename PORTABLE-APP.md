@@ -2,14 +2,14 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.4.1-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to the other Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, open the release folder, and drag **Obsidian Screenshot Importer.app** into **Applications**. Keep a local copy of the app on each Mac, rather than launching a partially downloaded app bundle from iCloud. The companion `Sources-1.4.1.zip` is not required to run the app; keep it with the distribution for source access and redistribution.
+1. Download `Obsidian-Screenshot-Importer-1.5.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, open the release folder, and drag **Obsidian Screenshot Importer.app** into **Applications**. Keep a local copy of the app on each Mac, rather than launching a partially downloaded app bundle from iCloud. The companion `Sources-1.5.0.zip` is not required to run the app; it accompanies the distribution for source access and redistribution.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
-Requirements: **Apple Silicon (M1 or later), macOS 13.5 or later**. This is not an Intel/universal build. The complete app includes Node.js, cwebp, and FFmpeg. It works offline with files already downloaded from iCloud.
+Requirements: **Apple Silicon (M1 or later), macOS 13.5 or later**. This is not an Intel/universal build. The complete app includes Node.js, cwebp, and FFmpeg. Image processing works offline with files already downloaded from iCloud; optional manual update checks require internet access.
 
-The build is ad-hoc signed, **not Apple Developer ID signed or notarized**. On another Mac, Gatekeeper may require approval in System Settings > Privacy & Security > Open Anyway ([Apple's instructions](https://support.apple.com/en-gb/102445)). Approve only the app you transferred from your own trusted copy. No disabling Gatekeeper or system-wide security changes are needed. Managed Macs may disallow unnotarized apps.
+The build is ad-hoc signed, **not Apple Developer ID signed or notarized**. On another Mac, Gatekeeper may require approval in System Settings > Privacy & Security > Open Anyway ([Apple's instructions](https://support.apple.com/en-gb/102445)). Only trusted release copies should be approved. No disabling Gatekeeper or system-wide security changes are needed. Managed Macs may disallow unnotarized apps.
 
 The ZIP is the canonical transfer artifact. This project's iCloud file provider can attach Finder metadata to unpacked `.app` directories, which fails strict code-signature validation. The build signs outside iCloud and puts that clean bundle into the ZIP. Strict signature validation succeeds after extraction to a local, non-iCloud folder. Keep the app itself in local Applications; only its data needs to be synced.
 
@@ -36,7 +36,7 @@ For the current iCloud setup, choose the same existing project `data` folder on 
 
 Old run logs contain absolute file paths. Continuing their rollback history assumes the same user name and folder paths on both Macs, as in this project's original setup. If paths differ, use the old Mac/path layout for old rollbacks; selecting new locations does not silently rewrite history. New imports use the selected locations.
 
-**Use one Mac at a time** and wait for iCloud to finish syncing before switching. A local lock prevents two desktop copies on the same Mac from using the same history folder. iCloud is not a distributed lock or transactional database. The legacy Terminal/launcher service does not participate in this lock: close it before using the new app.
+Only one Mac should operate on synchronized data at a time, after iCloud has finished syncing. A local lock prevents two desktop copies on the same Mac from using the same history folder. iCloud is not a distributed lock or transactional database.
 
 ## Window Behavior
 
@@ -62,7 +62,7 @@ Official upstream dependencies:
 - [WebP 1.6.0](https://developers.google.com/speed/webp/download), official standalone macOS arm64 cwebp.
 - [FFmpeg 7.1.5](https://ffmpeg.org/releases/), minimal LGPL static build, no network codecs or Homebrew libraries. PNG/JPEG output, PNG/JPEG/TIFF/BMP/WebP/GIF input, file protocol only; screenshot processing, not a general-purpose FFmpeg distribution.
 
-WebP/FFmpeg archive hashes were pinned from the initial HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`. Matching FFmpeg/WebP source archives, native/frontend/backend sources, and build configuration are in the companion `Sources-VERSION.zip` within the main distribution ZIP. Keep that source archive when redistributing the app. Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. No auto-updater or network connection is used by the running app.
+WebP/FFmpeg archive hashes were pinned from the initial HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`. Matching FFmpeg/WebP source archives, native/frontend/backend sources, and build configuration are in the companion `Sources-VERSION.zip` within the main distribution ZIP. That source archive must accompany redistribution. Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. Network connections are limited to explicitly requested GitHub update checks and downloads.
 
 From 1.1.0, the build strips only debug/local symbol tables from Node before signing; it does not remove ICU, runtime code, or image codecs. This reduces installed size without requiring dependencies on the destination Mac. Symbols are still available in the pinned upstream Node archive for low-level debugging.
 
@@ -72,18 +72,28 @@ From 1.2.4, a small bundled `preserve-creation-time` executable copies the exist
 
 `package.json` is the single version source. The build writes its value into both macOS version fields and the ZIP filename. Settings and About show the same version; `/api/health` exposes it for diagnostics. [CHANGELOG.md](CHANGELOG.md) records release changes using MAJOR.MINOR.PATCH. Close the old app before replacing it in Applications; the data folder is not inside the app and stays untouched.
 
+From 1.5.0, open **Settings > Update** or **Check for Updates...** in the application menu. The window lists stable releases and their GitHub release notes. **Download Update** streams the latest compatible version to the local support folder and verifies its size and SHA-256 digest. **Install and Restart** revalidates the archive, checks the bundle identity/version, Apple Silicon architecture and strict code signature, waits for graceful shutdown, replaces the app, and opens the new version. A startup marker confirms the backend before the previous copy is removed. If replacement fails, the old bundle is restored. If startup cannot be confirmed, the previous copy is retained and its recovery path is recorded in `update.log` beside `desktop.log`.
+
+Update installation requires a writable local application directory, normally `/Applications` or `~/Applications`. No administrator prompt is requested. Translocated, read-only, and external-volume copies cannot be replaced; move the app locally or use manual ZIP installation. New downloads and installation are blocked during imports, rollback, archive operations, and shutdown. Updates never overwrite screenshots, vault files, the local profile, or history/settings. Failed/offline/rate-limited checks do not prevent local work.
+
+The updater uses the public [GitHub Releases API](https://docs.github.com/en/rest/releases/releases) and [release-asset digest](https://docs.github.com/en/rest/releases/assets). Drafts, prereleases, downgrades, unexpected filenames, oversized downloads, and untrusted redirects are rejected. Release notes render as text, not remote HTML. HTTPS and the digest validate transport integrity; this ad-hoc-signed app does not have a separately signed publisher feed or Apple notarization. GitHub/repository security is part of the trust model. No automatic background checks, telemetry, GitHub login, or vault-data uploads are performed.
+
+Versions before 1.5.0 require one manual update to install the updater.
+
 **Settings > Parallel Images** persists Auto/1/2/3/4 in `data/settings.json`. Auto chooses up to four encoders based on CPU count, with a conservative low-memory fallback. It accelerates a batch of screenshots, not a single image. Encoders produce scratch files concurrently; filenames, backups, output publication, journal updates, and Markdown edits remain serial. Original/copy mode stays sequential. See [PERFORMANCE.md](PERFORMANCE.md) for timings and output-hash checks.
 
 Implementation:
 
 - `macos/DesktopApp.swift`: AppKit window, WKWebView, image windows, JS confirm/alert integration, directory picker, app menus, child process ownership, safe quit/restart.
+- `macos/UpdateInstaller.swift`: signed, nonprivileged update validation, staged replacement, recovery and restart helper.
+- `src/updates.mjs`, `public/updates.js`: fixed-repository releases, bounded verified downloads, update dialog and progress.
 - `macos/preserve-creation-time.c`: filesystem-only helper using `fsetattrlist(ATTR_CMN_CRTIME)`, bundled and signed alongside the converters. Never changes the source, follows symlinks, or restores an old modification time.
 - `src/desktop.mjs`: private stdin/stdout JSON protocol, random-port backend, local data lock, parent-pipe monitoring, shutdown after writes finish.
 - `src/desktopConfig.mjs`: local profile and migration-free discovery of the existing data folder.
-- `src/server.mjs`: the same backend as browser mode; rejects new writes after a desktop shutdown begins and exposes a non-HTTP busy check to its host.
-- `scripts/build-macos-app.sh`, `scripts/build-ffmpeg.sh`, `scripts/build-native-helpers.sh`: repeatable bundle build. `npm start` and `npm test` also build the helper for source-based development; direct `node` invocations require `npm run build:native` first on macOS.
+- `src/server.mjs`: imported loopback server factory; rejects new writes after a desktop shutdown/update begins and exposes a non-HTTP busy check to its host.
+- `scripts/build-macos-app.sh`, `scripts/build-ffmpeg.sh`, `scripts/build-native-helpers.sh`: repeatable bundle build. `npm test` builds the metadata helper for development; direct `node` test invocations require `npm run build:native` first on macOS or the built helper on PATH.
 
-The generated `macos/Obsidian Screenshot Importer.app` is a **legacy launcher**, not the portable application. It is generated by `scripts/setup-macos.zsh` from committed source templates and is excluded from Git and companion source archives. Use the new **dist** build. Source editing still happens in the project; rebuild the app after editing sources because its code is an immutable snapshot.
+Production launch is exclusively through the built native application. Legacy shell-launcher templates, dependency installation scripts, and the standalone server entrypoint are removed. Source changes require a rebuild because each app contains an immutable code snapshot. Existing support-directory names and journal identifiers are compatibility data, not alternative launch methods.
 
 ## Verification (2026-09-18)
 

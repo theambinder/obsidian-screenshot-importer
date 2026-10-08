@@ -8,7 +8,9 @@ requirements and implementation decisions; CHANGELOG.md records releases.
   screenshots or notes as a development check.
 - Keep note edits inside the configured Media categories. Preserve existing text,
   atomic writes, creation dates, source archives, and per-folder rollback journals.
-- Keep the app offline and the backend bound to loopback. User data belongs outside
+- Keep image processing offline and the backend bound to loopback. Only explicit
+  update checks/downloads may contact GitHub; never transmit vault or source data.
+  Use formal, impersonal English for public documentation. User data belongs outside
   the app bundle and outside Git; data, build, dist, and generated apps are ignored.
 - package.json is the version source. Update the changelog and relevant docs when
   releasing. Build the portable app before testing a new version against it.

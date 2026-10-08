@@ -1,6 +1,6 @@
 # Code Audit: 2026-09-18
 
-Follow-up: the portable native macOS app has since been implemented and tested; see [PORTABLE-APP.md](PORTABLE-APP.md). Its lifecycle, local data lock, and 35-test verification supersede the legacy launcher's limitations below. The original audit findings remain documented here.
+Follow-up: the portable native macOS app has since been implemented and tested; see [PORTABLE-APP.md](PORTABLE-APP.md). Its lifecycle and local data lock supersede the original source-launcher limitations. Legacy launch code is removed in 1.5.0; original findings below remain historical evidence, not current launch instructions.
 
 Scope: import, conversion and preview, rollback, archive/history, matching, settings, HTTP API, and the macOS launcher. Changes were tested using disposable temporary fixtures; the user's notes, screenshots, archive and saved settings were not changed.
 
@@ -37,7 +37,7 @@ The in-memory preview cache keeps at most 32 images / 128 MiB for up to one hour
 - `Auto Quality` optimizes the measured size curve, not perceptual image quality. It does not guarantee invisible losses, particularly for detailed live-action frames.
 - History still reads all small JSON logs to sort them and totals the whole archive once per Refresh. The latest-50 UI has no pagination. An index/pagination is the next step if this becomes slow at a large scale.
 - Attachment reference protection scans only the allowed Media categories and uses conservative filename matching; it is not a full Obsidian backlink index for the entire vault.
-- The macOS launcher is still a shell/controller wrapper and was inspected, not rebuilt or installed during this audit. Shutdown during processing can leave an interrupted run for manual inspection/rollback; there is no automatic resume. JSON checkpoints improve recovery but are not an fsync-backed transactional database.
+- At the time of this audit, the macOS host was a shell/controller wrapper. It has since been replaced by the native application with graceful shutdown. Hard process/OS interruption can still require manual inspection or rollback; checkpoints are not an fsync-backed transactional database.
 - Native Trash operations were reviewed but not exercised against the user's actual archive or macOS Trash. No real user files were moved or deleted during validation.
 
 ## Verification

@@ -16,6 +16,10 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private var pendingLocations: [String: String] = [:]
     private var stoppingFor: String?
     private var startupError: String?
+    private var updateProcess: Process?
+    private var updateOutput: Pipe?
+    private var updateBuffer = Data()
+    private var installingUpdate = false
     private var statusPanel: NSPanel?
     private let locationKeys = ["screenshotsRoot", "vaultRoot", "mediaRoot", "dataDir"]
     private let locationLabels = ["Screenshots", "Obsidian Vault", "Media", "History & Settings"]
@@ -49,6 +53,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(self, name: "locations")
         configuration.userContentController.add(self, name: "theme")
+        configuration.userContentController.add(self, name: "updates")
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -63,6 +68,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About \(name)", action: #selector(showAbout), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Check for Updates...", action: #selector(checkUpdates), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Locations...", action: #selector(editLocations), keyEquivalent: ",")
         appMenu.addItem(withTitle: "Open History Folder", action: #selector(openHistory), keyEquivalent: "")
@@ -70,7 +76,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide \(name)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit \(name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        for item in appMenu.items where [#selector(showAbout), #selector(editLocations), #selector(openHistory), #selector(openLog)].contains(item.action) { item.target = self }
+        for item in appMenu.items where [#selector(showAbout), #selector(checkUpdates), #selector(editLocations), #selector(openHistory), #selector(openLog)].contains(item.action) { item.target = self }
         appItem.submenu = appMenu
         menu.addItem(appItem)
         let editItem = NSMenuItem()
@@ -136,6 +142,9 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
             }
             process = child
             try child.run()
+            // Do not let a later updater process inherit the backend's pipe endpoints.
+            try? inputPipe.fileHandleForReading.close()
+            try? outputPipe.fileHandleForWriting.close()
             DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self, weak child] in
                 guard let self, self.process === child, self.baseURL == nil, self.stoppingFor == nil, child?.isRunning == true else { return }
                 self.startupError = "The service did not become ready within 30 seconds."
@@ -160,6 +169,12 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
                 }
                 if !FileManager.default.fileExists(atPath: profileURL.path) { try? saveLocations(locations) }
                 window.title = name
+                if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                   let marker = try? JSONSerialization.data(withJSONObject: ["version": version, "appPath": Bundle.main.bundleURL.path, "timestamp": Date().timeIntervalSince1970]) {
+                    let directory = supportURL.appendingPathComponent("updates")
+                    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    try? marker.write(to: directory.appendingPathComponent("installation-ready.json"), options: .atomic)
+                }
                 if stoppingFor != nil { send(["type": "shutdown"]); continue }
                 webView.load(URLRequest(url: url))
                 if locationKeys.prefix(3).contains(where: { !FileManager.default.fileExists(atPath: locations[$0] ?? "") }) {
@@ -167,6 +182,10 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
                 }
             } else if type == "error" {
                 startupError = message["message"] as? String
+            } else if type == "update-install" {
+                prepareUpdate(message)
+            } else if type == "update-error" {
+                showUpdateError(message["message"] as? String ?? "Unable to install the update.")
             } else if type == "stopping", message["busy"] as? Bool == true {
                 showWaitingPanel()
             } else if type == "status", message["busy"] as? Bool == false {
@@ -212,6 +231,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if installingUpdate { return .terminateCancel }
         guard process?.isRunning == true else { return .terminateNow }
         if stoppingFor == "quit" { return .terminateLater }
         stoppingFor = "quit"
@@ -249,7 +269,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     }
 
     @objc private func editLocations() {
-        guard stoppingFor == nil else { return }
+        guard stoppingFor == nil, !installingUpdate else { return }
         if process?.isRunning == true { send(["type": "status"]) }
         else { presentLocations() }
     }
@@ -341,12 +361,82 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     @objc private func openLog() { NSWorkspace.shared.open(supportURL.appendingPathComponent("desktop.log")) }
     @objc private func showAbout() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: name, .applicationVersion: version, .version: "Apple Silicon", .credits: NSAttributedString(string: "Local-only screenshot importer. Bundled Node.js, WebP, and FFmpeg. Licenses are included in the app. Corresponding source archives and build instructions accompany the app in its distribution ZIP.")])
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: name, .applicationVersion: version, .version: "Apple Silicon", .credits: NSAttributedString(string: "Local screenshot importer with optional GitHub release updates. Bundled Node.js, WebP, and FFmpeg. Licenses and corresponding sources accompany the distribution.")])
+    }
+
+    @objc private func checkUpdates() {
+        guard stoppingFor == nil, !installingUpdate else { return }
+        webView.evaluateJavaScript("window.openAppUpdates?.()", completionHandler: nil)
+    }
+
+    private func prepareUpdate(_ message: [String: Any]) {
+        guard !installingUpdate, let archive = message["archive"] as? String,
+              let version = message["version"] as? String, let digest = message["digest"] as? String else { return }
+        installingUpdate = true
+        window.title = "\(name) - Preparing Update..."
+        do {
+            // Copy the helper outside the bundle it will replace; no shell or elevation is used.
+            let directory = supportURL.appendingPathComponent("updates/installer-" + UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let helper = directory.appendingPathComponent("UpdateInstaller")
+            try FileManager.default.copyItem(at: Bundle.main.resourceURL!.appendingPathComponent("bin/update-installer"), to: helper)
+            let child = Process(), pipe = Pipe()
+            child.executableURL = helper
+            child.arguments = [String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundleURL.path, archive, version, digest, supportURL.path, "install"]
+            child.standardInput = FileHandle.nullDevice
+            child.standardOutput = pipe
+            child.standardError = logHandle
+            updateProcess = child
+            updateOutput = pipe
+            updateBuffer = Data()
+            pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+                let data = handle.availableData
+                guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+                DispatchQueue.main.async { self?.receiveUpdate(data) }
+            }
+            child.terminationHandler = { [weak self] child in
+                DispatchQueue.main.async {
+                    try? FileManager.default.removeItem(at: directory)
+                    guard let self, self.installingUpdate else { return }
+                    self.showUpdateError("Update preparation stopped (exit \(child.terminationStatus)).")
+                }
+            }
+            try child.run()
+        } catch { showUpdateError(error.localizedDescription) }
+    }
+
+    private func receiveUpdate(_ data: Data) {
+        updateBuffer.append(data)
+        while let newline = updateBuffer.firstIndex(of: 10) {
+            let line = updateBuffer.prefix(upTo: newline)
+            updateBuffer.removeSubrange(...newline)
+            guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: String] else { continue }
+            if message["type"] == "ready" {
+                installingUpdate = false
+                // terminateLater pumps a nested run loop; enter it outside a main-queue block
+                // so the backend's main-queue termination callback can still be delivered.
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+            } else if message["type"] == "error" {
+                showUpdateError(message["message"] ?? "Unable to prepare the update.")
+            }
+        }
+    }
+
+    private func showUpdateError(_ message: String) {
+        installingUpdate = false
+        window.title = name
+        send(["type": "cancel-update"])
+        webView.evaluateJavaScript("window.appUpdateFailed?.()", completionHandler: nil)
+        let alert = NSAlert()
+        alert.messageText = "Unable to install the update"
+        alert.informativeText = message
+        alert.beginSheetModal(for: window)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, let url = message.frameInfo.request.url, isLocal(url) else { return }
         if message.name == "locations" { editLocations() }
+        if message.name == "updates", message.body as? String == "install", !installingUpdate, stoppingFor == nil { send(["type": "install-update"]) }
         if message.name == "theme", let theme = message.body as? String {
             switch theme {
             case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)

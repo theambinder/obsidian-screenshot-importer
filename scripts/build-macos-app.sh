@@ -53,6 +53,9 @@ cp macos/DesktopInfo.plist "$APP/Contents/Info.plist"
 /usr/bin/swiftc -swift-version 5 -O -target arm64-apple-macos13.5 \
   -module-cache-path "$ROOT/build/swift-cache" macos/DesktopApp.swift \
   -o "$APP/Contents/MacOS/ObsidianScreenshotImporter" -framework AppKit -framework WebKit
+/usr/bin/swiftc -swift-version 5 -O -target arm64-apple-macos13.5 \
+  -module-cache-path "$ROOT/build/swift-cache" macos/UpdateInstaller.swift \
+  -o "$RES/bin/update-installer" -framework AppKit
 /usr/bin/swiftc -swift-version 5 -module-cache-path "$ROOT/build/swift-cache" macos/MakeIcon.swift -o "$STAGING/MakeIcon" -framework AppKit
 "$STAGING/MakeIcon" "$STAGING/AppIcon.iconset"
 /usr/bin/iconutil -c icns "$STAGING/AppIcon.iconset" -o "$RES/AppIcon.icns"
@@ -63,7 +66,7 @@ cp build/vendor/libwebp-1.6.0-mac-arm64/bin/cwebp "$RES/bin/cwebp"
 cp build/vendor/ffmpeg-7.1.5/ffmpeg "$RES/bin/ffmpeg"
 cp -R src public "$RES/app/"
 cp package.json "$RES/app/"
-cp README.md README.ru.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$RES/"
+cp README.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$RES/"
 cp build/vendor/node-v24.21.0-darwin-arm64/LICENSE "$RES/Licenses/Node.txt"
 cp build/vendor/ffmpeg-7.1.5/COPYING.LGPLv2.1 "$RES/Licenses/FFmpeg.txt"
 cp build/vendor/libwebp-1.6.0/COPYING "$RES/Licenses/WebP.txt"
@@ -74,8 +77,8 @@ cp build/downloads/ffmpeg-7.1.5.tar.xz "$SOURCES/"
 "$RES/bin/ffmpeg" -hide_banner -buildconf > "$SOURCES/ffmpeg-build-config.txt" 2>&1
 cp -R src public scripts tests "$SOURCES/"
 mkdir -p "$SOURCES/macos"
-cp macos/*.swift macos/*.c macos/*.plist macos/*.zsh "$SOURCES/macos/"
-cp package.json .gitignore .gitattributes AGENTS.md README.md README.ru.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$SOURCES/"
+cp macos/*.swift macos/*.c macos/*.plist "$SOURCES/macos/"
+cp package.json .gitignore .gitattributes AGENTS.md README.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$SOURCES/"
 cp -R .github "$SOURCES/"
 cp -R "$RES/Licenses" "$SOURCES/"
 /usr/bin/ditto -c -k --keepParent "$SOURCES" "$RELEASE/Sources-$VERSION.zip"

@@ -3,14 +3,13 @@
 Import screenshots and images into Obsidian media notes with automatic matching,
 episode organization, image compression, and rollback support.
 
-A standalone macOS app for reviewing batches before adding them to your vault.
+A standalone macOS app for reviewing batches before adding them to an Obsidian vault.
 Images can come from any player, game, or other source.
 
 [Download](https://github.com/theambinder/obsidian-screenshot-importer/releases/latest)
-· [Changelog](CHANGELOG.md) · [Русский](README.ru.md)
+· [Changelog](CHANGELOG.md)
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/ambinder)
-· [Sponsor](https://buymeacoffee.com/ambinder)
 
 ## Get Started
 
@@ -18,14 +17,15 @@ Requires **Apple Silicon (M1 or later)** and **macOS 13.5 or later**.
 
 1. Download the Apple Silicon ZIP from [Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases).
 2. Extract it in Downloads and move **Obsidian Screenshot Importer.app** to Applications.
-3. Open the app and select your folders in **Settings > Choose Folders...**:
+3. Open the app and select locations in **Settings > Choose Folders...**:
    screenshots, Obsidian vault, Media, and history/settings.
 4. Review the suggested notes and episodes, select folders, and press **Run**.
 5. Close the main window or press **Cmd+Q** to stop the app and its local service.
    An active operation finishes before shutdown.
 
 The release includes Node.js, cwebp, and FFmpeg; no separate installation is needed.
-The app works offline. It is ad-hoc signed, not notarized; macOS may require
+Image processing works offline. Optional update checks contact GitHub only when requested.
+The app is ad-hoc signed, not notarized; macOS may require
 approval in System Settings > Privacy & Security when opening a downloaded copy.
 See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 
@@ -65,44 +65,49 @@ The selected Media folder must be inside the vault and contain the supported not
 categories: **Anime, Movies, Series, Cartoons, Games, Manga, Comics**. Notes outside
 these categories are not edited. Missing notes are created manually in Obsidian.
 
-Processed originals move to `Screenshots/_archive/<run>/`. Keep them until you have
-checked the result. History, rollback backups, mappings, and preferences are stored
+Processed originals move to `Screenshots/_archive/<run>/`. Originals should be retained
+until the result has been checked. History, rollback backups, mappings, and preferences are stored
 in the separate data folder, which is excluded from Git and release archives.
 Sharing that folder between Macs requires the same paths for old rollback history;
 use one Mac at a time and let synchronization finish before switching.
 
-## Develop From Source
+## Updates
 
-Clone the repository, then install development tools on macOS:
+Open **Settings > Update** or the application menu's **Check for Updates...**.
+The Updates window lists published stable GitHub releases and their changes.
+**Download Update** downloads the latest compatible Apple Silicon release and checks
+its size and SHA-256 digest. **Install and Restart** validates the application bundle,
+replaces the closed app, and reopens it. Settings, history, and vault files remain unchanged.
+
+Installation requires a writable local application folder. Downloaded or translocated
+copies must be moved to Applications first. An active import, rollback, or archive operation
+must finish before downloading or installing an update. No background update checks,
+GitHub account, telemetry, or automatic installation are used.
+
+Versions before 1.5.0 require one manual installation of a release with the updater.
+
+## Development
+
+Clone the repository on an Apple Silicon Mac with Apple's Command Line Tools:
 
 ```sh
 git clone https://github.com/theambinder/obsidian-screenshot-importer.git
 cd obsidian-screenshot-importer
-/bin/zsh scripts/setup-macos.zsh
+/bin/bash scripts/build-macos-app.sh
 ```
 
-The setup checks existing tools and installs missing Homebrew, Node.js 20+, cwebp,
-and FFmpeg. Apple's Command Line Tools are needed to compile native helpers.
-The JavaScript application has no npm dependencies.
+The build downloads checksum-pinned Node.js, WebP, and FFmpeg distributions and
+bundles the required executables. No Homebrew or dependency installer is supplied.
+The JavaScript application has no npm dependencies. Production launch is through
+the built application, not a standalone browser service or legacy launcher.
 
-For browser-based development, provide your own absolute paths:
-
-```sh
-export OBSIDIAN_SCREENSHOTS_ROOT="$HOME/Pictures/Screenshots"
-export OBSIDIAN_VAULT_ROOT="$HOME/Documents/My Vault"
-export OBSIDIAN_MEDIA_ROOT="$OBSIDIAN_VAULT_ROOT/Bases/Databases/Media"
-npm start
-```
-
-Open **http://127.0.0.1:3787** and stop with **Ctrl+C**. Optional environment variables:
-`OBSIDIAN_SCREENSHOTS_PORT` and `OBSIDIAN_SCREENSHOTS_DATA_DIR`.
-The existing defaults and `IINA_IMPORTER_PORT` remain for older local setups.
-Environment variables configure source/browser mode; packaged apps use their
-local folder-selection profile. `.env` files are not loaded automatically.
+The source test suite requires Node.js 20+, `cwebp`, and a full FFmpeg installation
+with the `lavfi` input used to generate fixtures. These development tools must
+precede the bundle's minimal FFmpeg on `PATH`. The portable integration test
+separately exercises the bundled executables without external dependencies.
 
 ```sh
 npm test
-/bin/bash scripts/build-macos-app.sh
 ```
 
 Tests use disposable fixtures. Building on Apple Silicon creates the app and a

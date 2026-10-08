@@ -913,6 +913,26 @@ select:focus-visible {
   max-height: min(820px, calc(100vh - 48px));
 }
 
+.update-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100% - 32px));
+  height: fit-content;
+  max-height: min(650px, calc(100dvh - 32px));
+  overflow: hidden;
+  color: var(--ink);
+}
+.update-dialog:not([open]) { display: none; }
+.update-dialog::backdrop { background: rgba(17, 21, 23, 0.4); }
+.update-dialog > :not(.update-releases) { flex: 0 0 auto; }
+.update-dialog progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.update-releases { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.update-releases details { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.update-releases details:first-child { padding-top: 0; }
+.update-releases summary { cursor: pointer; }
+.update-releases summary span { margin-left: 12px; }
+.release-notes { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; margin: 10px 0; }
+
 .duplicate-episode-dialog {
   display: flex;
   flex-direction: column;

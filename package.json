@@ -1,6 +1,6 @@
 {
   "name": "obsidian-screenshot-importer",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "Import screenshots and images into Obsidian media notes with matching, compression, episode organization, and rollback.",
@@ -10,8 +10,6 @@
   },
   "scripts": {
     "build:native": "/bin/bash scripts/build-native-helpers.sh",
-    "prestart": "npm run build:native",
-    "start": "node src/server.mjs",
     "pretest": "npm run build:native",
     "test": "node --test tests/*.test.mjs"
   },

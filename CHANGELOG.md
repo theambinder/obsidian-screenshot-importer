@@ -1,8 +1,18 @@
 # Changelog
 
-Version source: `package.json`. The same version is shown in Settings, the native About window, macOS bundle metadata, the health endpoint, and the distribution ZIP filename. Releases use MAJOR.MINOR.PATCH: breaking changes, compatible features, and fixes respectively. No automatic updater is installed; replace the local app while it is closed. User data remains separate.
+Version source: `package.json`. The same version is shown in Settings, the native About window, macOS bundle metadata, the health endpoint, and the distribution ZIP filename. Releases use MAJOR.MINOR.PATCH: breaking changes, compatible features, and fixes respectively. From 1.5.0, manual in-app GitHub updates are available. User data remains separate.
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
+
+## 1.5.0 - 2026-10-08
+
+- Add Settings > Update and the native Check for Updates menu. List stable GitHub releases, installed/new versions, dates, and release notes in a compact window.
+- Download compatible Apple Silicon updates with visible progress and mandatory size/SHA-256 verification. Restrict the repository, filenames, release channel, HTTPS redirects, response sizes, and timeouts; exclude downgrades and remote HTML.
+- Add Install and Restart with native bundle/version/architecture/signature validation, staged replacement after graceful shutdown, previous-copy recovery, and backend-startup confirmation. No administrator privileges, background checks, account, telemetry, or vault-data uploads are required.
+- Block overlapping update downloads, imports, rollback, archive deletion, and installation. Preserve all external settings, profiles, history, screenshots, and vault files.
+- Remove the Russian README and translate the detailed specification into formal English. Retain only the funding button in the README and GitHub's funding sidebar link.
+- Remove legacy shell launcher/templates, Homebrew setup, npm start, and the standalone production server entrypoint. Retain reproducible application builds, developer tests, and data compatibility paths.
+- Verify all 95 automated tests, a checksum-verified GitHub download, and the complete native download/install/restart cycle using disposable fixtures. Confirm settings preservation and previous-copy cleanup without importing or modifying real media data.
 
 ## 1.4.1 - 2026-10-08
 

@@ -14,9 +14,9 @@
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
-  <key>NSDocumentsFolderUsageDescription</key><string>Read screenshots and update the Obsidian notes and attachments you select.</string>
-  <key>NSDesktopFolderUsageDescription</key><string>Access screenshot and vault folders when you choose a location on the Desktop.</string>
-  <key>NSRemovableVolumesUsageDescription</key><string>Access the screenshot, vault, or history folder you select.</string>
+  <key>NSDocumentsFolderUsageDescription</key><string>Read screenshots and update selected Obsidian notes and images.</string>
+  <key>NSDesktopFolderUsageDescription</key><string>Access selected screenshot and vault folders on the Desktop.</string>
+  <key>NSRemovableVolumesUsageDescription</key><string>Access selected screenshot, vault, and history folders.</string>
   <key>NSAppleEventsUsageDescription</key><string>Move archived screenshots to the macOS Trash when you request it.</string>
 </dict>
 </plist>

@@ -22,14 +22,14 @@ import { assertInside, commandVersion, formatBytes, IMAGE_EXTENSIONS, naturalCom
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.resolve(__dirname, '../public');
-export function createAppServer(config = resolveConfig()) {
+export function createAppServer(config = resolveConfig(), { updater = null } = {}) {
 const jobs = new Map();
 const previews = new PreviewCache();
 let mutationActive = false;
 let activeJobId = null;
 let pendingWrites = 0;
 let stopping = false;
-const exclusivePaths = new Set(['/api/run', '/api/rollback', '/api/rollback-item', '/api/archive/clear', '/api/archive/clear-run', '/api/archive/clear-item']);
+const exclusivePaths = new Set(['/api/run', '/api/rollback', '/api/rollback-item', '/api/archive/clear', '/api/archive/clear-run', '/api/archive/clear-item', '/api/updates/download']);
 
 function sendJson(res, value, status = 200) {
   const body = JSON.stringify(value, null, 2);
@@ -58,6 +58,26 @@ async function readBody(req) {
 }
 
 async function handleApi(req, res, url) {
+  if (url.pathname === '/api/updates/state' && req.method === 'GET') {
+    sendJson(res, { supported: Boolean(updater), ...updater?.state });
+    return;
+  }
+  if (url.pathname === '/api/updates/check' && req.method === 'POST') {
+    if (!updater) throw Object.assign(new Error('Updates are available in the macOS application'), { status: 400 });
+    sendJson(res, await updater.check());
+    return;
+  }
+  if (url.pathname === '/api/updates/download' && req.method === 'POST') {
+    if (!updater) throw Object.assign(new Error('Updates are available in the macOS application'), { status: 400 });
+    const { tag } = await readBody(req);
+    // Validate before transferring the exclusive lock to a detached download.
+    if (!updater.releases.some((release) => release.tag === tag && release.newer && release.asset)) {
+      throw Object.assign(new Error('No verified compatible update is available'), { status: 400 });
+    }
+    updater.download(tag).catch(() => {}).finally(() => { mutationActive = false; });
+    sendJson(res, { started: true });
+    return true;
+  }
   if (url.pathname === '/api/health') {
     sendJson(res, {
       ok: true,
@@ -621,13 +641,12 @@ const server = http.createServer(async (req, res) => {
 });
 server.isBusy = () => mutationActive || pendingWrites > 0;
 server.prepareShutdown = () => { stopping = true; };
+server.prepareUpdate = () => {
+  if (stopping || server.isBusy()) throw new Error('Wait for the current operation to finish before installing an update');
+  if (!updater?.downloaded) throw new Error('Download and verify an update before installing it');
+  stopping = true;
+  return updater.downloaded;
+};
+server.cancelUpdate = () => { stopping = false; };
 return server;
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-const config = resolveConfig();
-const server = createAppServer(config);
-server.listen(config.port, '127.0.0.1', () => {
-  console.log(`Obsidian Screenshot Importer: http://127.0.0.1:${config.port}`);
-});
 }

@@ -2,6 +2,7 @@ import { nextFolderSort, sortFolders, setNoteFoldersEnabled, setNoteFoldersMode,
 import { normalizeTheme, resolveTheme } from './theme.js';
 import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicateEpisodes } from './episodeSelection.js';
 import { createTabScroll } from './tabScroll.js';
+import { createUpdates } from './updates.js';
 
 const state = {
   config: null,
@@ -21,6 +22,8 @@ const state = {
   jobTimer: null,
   activeJobId: null,
   busy: false,
+  operationBusy: false,
+  updateBusy: false,
   archiveCanTrash: false,
   lastCheckboxIndex: null,
   openRunIds: new Set(),
@@ -217,8 +220,19 @@ function renderFolderSort() {
   });
 }
 
+const updates = createUpdates({
+  api, isBusy: () => state.busy,
+  setUpdateBusy: (value) => {
+    state.updateBusy = value;
+    state.busy = state.operationBusy || Boolean(state.activeJobId) || value;
+    updateBusyControls();
+  },
+  flushSettings: () => window.flushAppSettings(), formatDate, formatBytes,
+});
+
 async function initialize() {
   await loadSettings();
+  await updates.restore();
   const { job } = await api('/api/active-job');
   if (job) {
     setProgress(job);
@@ -1552,7 +1566,8 @@ function statusLabel(kind) {
 }
 
 function setBusy(isBusy, text = '') {
-  state.busy = isBusy || Boolean(state.activeJobId);
+  state.operationBusy = isBusy;
+  state.busy = isBusy || Boolean(state.activeJobId) || state.updateBusy;
   updateBusyControls();
   if (text) setStatusText(text);
 }
@@ -1565,6 +1580,7 @@ function updateBusyControls() {
   for (const button of els.runsList.querySelectorAll('.rollback-run, .rollback-item, .trash-run-archive, .trash-item-archive')) {
     button.disabled = state.busy;
   }
+  updates.refresh();
 }
 
 function setStatusText(text) {

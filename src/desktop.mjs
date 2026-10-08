@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import readline from 'node:readline';
 import { createAppServer } from './server.mjs';
 import { desktopSupportRoot, loadDesktopConfig } from './desktopConfig.mjs';
+import { UpdateManager } from './updates.mjs';
 
 const supportRoot = desktopSupportRoot();
 const profilePath = process.env.OBSIDIAN_SCREENSHOTS_PROFILE || path.join(supportRoot, 'locations.json');
@@ -64,13 +65,17 @@ async function acquireLock(dataDir) {
 try {
   const config = await loadDesktopConfig(profilePath);
   releaseLock = await acquireLock(config.dataDir);
-  server = createAppServer(config);
+  server = createAppServer(config, { updater: new UpdateManager(path.join(supportRoot, 'updates')) });
   const input = readline.createInterface({ input: process.stdin });
   input.on('line', (line) => {
     try {
       const message = JSON.parse(line);
       if (message.type === 'shutdown') shutdown().catch(fail);
       else if (message.type === 'status') notify({ type: 'status', busy: server.isBusy() });
+      else if (message.type === 'install-update') {
+        try { notify({ type: 'update-install', ...server.prepareUpdate() }); }
+        catch (error) { notify({ type: 'update-error', message: error.message }); }
+      } else if (message.type === 'cancel-update') server.cancelUpdate();
     } catch (error) { console.error(error.message); }
   });
   input.on('close', () => shutdown().catch(fail));

@@ -118,6 +118,7 @@
             <span id="appVersion" class="subtle"></span>
             <span class="subtle">Appearance, output, quality defaults, and locations</span>
           </div>
+          <div class="toolbar-actions"><button id="updateButton" class="button-with-icon" type="button"><span class="ui-icon icon-refresh" aria-hidden="true"></span>Update</button></div>
         </div>
 
         <div class="settings-grid">
@@ -312,6 +313,19 @@
       </form>
     </dialog>
 
+    <dialog id="updateDialog" class="modal update-dialog" aria-labelledby="updateTitle">
+      <div class="modal-head">
+        <div><h2 id="updateTitle">Updates</h2><div id="updateVersion" class="result-meta"></div></div>
+        <button id="closeUpdateButton" class="icon-button" type="button" aria-label="Close">×</button>
+      </div>
+      <div id="updateStatus" class="result-meta" role="status" aria-live="polite"></div>
+      <progress id="updateProgress" max="100" value="0" hidden></progress>
+      <div id="updateReleases" class="update-releases"></div>
+      <div class="modal-actions">
+        <button id="checkUpdateButton" class="button-with-icon" type="button"><span class="ui-icon icon-refresh" aria-hidden="true"></span>Check Again</button>
+        <button id="installUpdateButton" class="primary" type="button" disabled>Download Update</button>
+      </div>
+    </dialog>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
