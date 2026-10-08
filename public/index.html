@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Obsidian Screenshot Automation</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div id="stickyShell" class="sticky-shell">
+      <header class="topbar">
+        <div>
+          <h1>Obsidian Screenshot Automation</h1>
+        </div>
+        <nav class="tabs" aria-label="Sections">
+          <button class="tab-button active" type="button" data-tab="screenshots">Screenshots</button>
+          <button class="tab-button" type="button" data-tab="history">History</button>
+          <button class="tab-button" type="button" data-tab="settings">Settings</button>
+        </nav>
+      </header>
+
+      <section class="progress-band" aria-label="Progress">
+        <div class="progress-row">
+          <div class="progress-line">
+            <div class="progress-track">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressText" class="progress-text"></div>
+          </div>
+          <div class="top-actions">
+            <button id="runButton" type="button" class="primary">▶ Run</button>
+          </div>
+        </div>
+        <div id="currentText" class="current-text">Select folders and press Run to start</div>
+      </section>
+    </div>
+
+    <main>
+      <section id="screenshotsPanel" class="tab-panel table-band" aria-label="Screenshots">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>Screenshots</h2>
+            <span id="selectionSummary" class="subtle"></span>
+          </div>
+          <div class="toolbar-actions">
+            <select id="folderSortSelect" class="compact-sort" aria-label="Sort folders">
+              <option value="">Scan order</option>
+              <option value="source:asc">Source ↑</option>
+              <option value="source:desc">Source ↓</option>
+              <option value="note:asc">Note ↑</option>
+              <option value="note:desc">Note ↓</option>
+              <option value="season:asc">Season ↑</option>
+              <option value="season:desc">Season ↓</option>
+              <option value="episode:asc">Episode ↑</option>
+              <option value="episode:desc">Episode ↓</option>
+            </select>
+            <button id="resetSortButton" class="button-with-icon" type="button" title="Reset sorting to scan order" disabled><span class="ui-icon icon-undo" aria-hidden="true"></span>Reset sort</button>
+            <button id="scanButton" class="button-with-icon" type="button"><span class="ui-icon icon-refresh" aria-hidden="true"></span>Refresh</button>
+            <button id="selectAllButton" type="button">Select all</button>
+            <button id="toggleMatchedButton" type="button">Select matched</button>
+            <button id="clearSelectionButton" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="col-enabled">
+              <col class="col-source">
+              <col class="col-note">
+              <col class="col-quality">
+              <col class="col-mode">
+              <col class="col-episode">
+            </colgroup>
+            <thead>
+              <tr>
+                <th><span class="column-label">Use</span></th>
+                <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="source" data-sort-label="Source">Source <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="note" data-sort-label="Note">Note <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                <th><span class="column-label">Quality</span></th>
+                <th><span class="column-label">Mode</span></th>
+                <th class="episode-sort-header"><div class="episode-sort-buttons"><button class="sort-button" type="button" data-sort-key="season" data-sort-label="Season">S <span class="sort-indicator" aria-hidden="true">↕</span></button><button class="sort-button" type="button" data-sort-key="episode" data-sort-label="Episode">E <span class="sort-indicator" aria-hidden="true">↕</span></button></div></th>
+              </tr>
+            </thead>
+            <tbody id="foldersBody">
+              <tr>
+                <td colspan="6" class="empty">Scanning...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="historyPanel" class="tab-panel history-band" aria-label="History" hidden>
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>History</h2>
+            <span id="runsSummary" class="subtle"></span>
+            <span id="archiveSummary" class="subtle"></span>
+          </div>
+          <div class="toolbar-actions">
+            <button id="openArchiveButton" class="button-with-icon" type="button"><span class="ui-icon icon-folder" aria-hidden="true"></span>Open Archive</button>
+            <button id="clearArchiveButton" class="danger" type="button">Trash Archive</button>
+            <button id="refreshRunsButton" class="button-with-icon" type="button"><span class="ui-icon icon-refresh" aria-hidden="true"></span>Refresh</button>
+          </div>
+        </div>
+        <div id="runsList" class="runs-list"></div>
+      </section>
+
+      <section id="settingsPanel" class="tab-panel settings-page" aria-label="Settings" hidden>
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>Settings</h2>
+            <span id="appVersion" class="subtle"></span>
+            <span class="subtle">Appearance, output, quality defaults, and locations</span>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <section class="settings-card appearance-settings-card">
+            <h2>Appearance</h2>
+            <label for="themeSelect" class="subtle">Theme</label>
+            <select id="themeSelect">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </section>
+          <section class="settings-card output-settings-card">
+            <h2>Output</h2>
+            <div class="settings-fields">
+              <label>
+                Format
+                <select id="formatSelect">
+                  <option value="webp" selected>webp</option>
+                  <option value="jpg">jpg</option>
+                  <option value="png">png</option>
+                  <option value="original">original</option>
+                </select>
+              </label>
+
+              <label>
+                WebP Effort
+                <select id="effortSelect">
+                  <option value="0">0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6" selected>6</option>
+                </select>
+              </label>
+
+              <label>
+                Filename Conflict
+                <select id="conflictSelect">
+                  <option value="increment" selected>increment</option>
+                  <option value="reuse">reuse</option>
+                  <option value="skip">skip</option>
+                  <option value="overwrite">overwrite</option>
+                </select>
+              </label>
+              <label>
+                Parallel Images
+                <select id="parallelImagesSelect" aria-label="Parallel Images">
+                  <option value="0">Auto</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-card quality-settings-card">
+            <h2>Quality Defaults</h2>
+            <div class="quality-fields">
+              <label class="quality-default-field">
+                Fallback
+                <input id="qualityInput" type="number" min="1" max="100" value="90">
+              </label>
+              <div id="qualityDefaultsFields" class="quality-defaults-fields"></div>
+            </div>
+          </section>
+
+          <section class="settings-card locations-settings-card">
+            <h2>Locations</h2>
+            <button id="desktopLocationsButton" type="button" hidden>Choose Folders...</button>
+            <dl class="path-list">
+              <dt>Screenshots</dt>
+              <dd id="screenshotsPath"></dd>
+              <dt>Vault</dt>
+              <dd id="vaultPath"></dd>
+              <dt>Media</dt>
+              <dd id="mediaPath"></dd>
+              <dt>Attachments</dt>
+              <dd id="attachmentsTemplate"></dd>
+            </dl>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="doneModal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+        <div class="modal-head">
+          <h2 id="doneTitle">Done</h2>
+          <button id="closeModalButton" class="icon-button" type="button" aria-label="Close">×</button>
+        </div>
+        <div id="doneModalBody" class="modal-body"></div>
+        <div class="modal-actions">
+          <button id="openHistoryButton" type="button">Open History</button>
+          <button id="doneOkButton" class="primary" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="previewModal" class="modal-backdrop" hidden>
+      <div class="modal preview-modal" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+        <div class="modal-head">
+          <div>
+            <h2 id="previewTitle">Compression Preview</h2>
+            <div id="previewFolderTitle" class="result-meta"></div>
+          </div>
+          <button id="closePreviewButton" class="icon-button" type="button" aria-label="Close">×</button>
+        </div>
+
+        <div class="preview-settings">
+          <label>
+            Format
+            <select id="previewFormatSelect">
+              <option value="webp">webp</option>
+              <option value="jpg">jpg</option>
+              <option value="png">png</option>
+              <option value="original">original</option>
+            </select>
+          </label>
+          <label>
+            Quality
+            <span class="quality-suggest-row">
+              <input id="previewQualityInput" type="number" min="1" max="100" value="90">
+              <button id="previewSuggestedQualityButton" type="button" hidden>Auto</button>
+            </span>
+          </label>
+          <label>
+            Effort
+            <select id="previewEffortSelect">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </label>
+          <button id="applyPreviewQualityButton" class="primary" type="button">Apply Quality</button>
+        </div>
+
+        <div class="preview-body">
+          <aside class="preview-file-list" id="previewFileList"></aside>
+          <section class="preview-compare">
+            <div class="preview-pane">
+              <div class="preview-pane-head">
+                <strong>Original</strong>
+                <span id="previewOriginalMeta" class="result-meta"></span>
+              </div>
+              <div class="preview-image-pair">
+                <a id="previewOriginalLink" class="preview-image-box" href="#" target="_blank" rel="noopener" title="Open original in a new tab">
+                  <img id="previewOriginalImage" alt="">
+                </a>
+                <a id="previewOriginalCropLink" class="preview-crop-box" href="#" target="_blank" rel="noopener" title="Open original in a new tab">
+                  <img id="previewOriginalCropImage" alt="">
+                </a>
+              </div>
+            </div>
+            <div class="preview-pane">
+              <div class="preview-pane-head">
+                <strong>Converted</strong>
+                <span id="previewConvertedMeta" class="result-meta"></span>
+              </div>
+              <div class="preview-image-pair">
+                <a id="previewConvertedLink" class="preview-image-box" href="#" target="_blank" rel="noopener" title="Open converted preview in a new tab">
+                  <img id="previewConvertedImage" alt="">
+                </a>
+                <a id="previewConvertedCropLink" class="preview-crop-box" href="#" target="_blank" rel="noopener" title="Open converted preview in a new tab">
+                  <img id="previewConvertedCropImage" alt="">
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div id="previewStatus" class="current-text"></div>
+      </div>
+    </div>
+
+    <dialog id="duplicateEpisodeDialog" class="modal duplicate-episode-dialog" aria-labelledby="duplicateEpisodeTitle" aria-describedby="duplicateEpisodeDescription">
+      <div class="modal-head">
+        <h2 id="duplicateEpisodeTitle">Duplicate episodes</h2>
+      </div>
+      <p id="duplicateEpisodeDescription" class="result-meta">These folders target the same episode. Their screenshots will be added under one episode heading.</p>
+      <div id="duplicateEpisodeGroups" class="modal-items"></div>
+      <form method="dialog" class="modal-actions">
+        <button type="submit" value="cancel" autofocus>Cancel</button>
+        <button type="submit" value="continue" class="primary">Continue Run</button>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>local.ambinder.obsidian-screenshot-automation.desktop</string>
+  <key>CFBundleName</key><string>Obsidian Screenshot Automation</string>
+  <key>CFBundleDisplayName</key><string>Obsidian Screenshot Automation</string>
+  <key>CFBundleExecutable</key><string>ObsidianScreenshotAutomation</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.0.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>13.5</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSPrincipalClass</key><string>NSApplication</string>
+  <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>NSDocumentsFolderUsageDescription</key><string>Read screenshots and update the Obsidian notes and attachments you select.</string>
+  <key>NSDesktopFolderUsageDescription</key><string>Access screenshot and vault folders when you choose a location on the Desktop.</string>
+  <key>NSRemovableVolumesUsageDescription</key><string>Access the screenshot, vault, or history folder you select.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Move archived screenshots to the macOS Trash when you request it.</string>
+</dict>
+</plist>
