@@ -1,9 +1,9 @@
 {
   "name": "obsidian-screenshot-importer",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "type": "module",
-  "description": "Import screenshots and images into Obsidian media notes with matching, compression, episode organization, and rollback.",
+  "description": "Map image folders to Obsidian notes, then batch-import with compression, episode organization, and rollback.",
   "repository": {
     "type": "git",
     "url": "https://github.com/theambinder/obsidian-screenshot-importer.git"

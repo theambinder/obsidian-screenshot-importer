@@ -1,7 +1,7 @@
 # Obsidian Screenshot Importer
 
-Import screenshots and images into Obsidian media notes with automatic matching,
-episode organization, image compression, and rollback support.
+Map image folders to Obsidian notes, then batch-import with compression,
+episode organization, and rollback.
 
 A standalone macOS app for reviewing batches before adding them to an Obsidian vault.
 Images can come from any player, game, or other source.
@@ -23,7 +23,11 @@ Requires **Apple Silicon (M1 or later)** and **macOS 13.5 or later**.
 5. Close the main window or press **Cmd+Q** to stop the app and its local service.
    An active operation finishes before shutdown.
 
-The release includes Node.js, cwebp, and FFmpeg; no separate installation is needed.
+The main ZIP contains only **Obsidian Screenshot Importer.app**, including Node.js,
+cwebp, and FFmpeg; no separate installation is needed. The optional
+[Sources archive](https://github.com/theambinder/obsidian-screenshot-importer/releases/latest)
+is a separate release asset with corresponding FFmpeg/WebP sources and build materials.
+FFmpeg is distributed under LGPLv2.1; license notices remain inside the app.
 Image processing works offline. Optional update checks contact GitHub only when requested.
 The app is ad-hoc signed, not notarized; macOS may require
 approval in System Settings > Privacy & Security when opening a downloaded copy.
@@ -111,7 +115,7 @@ npm test
 ```
 
 Tests use disposable fixtures. Building on Apple Silicon creates the app and a
-versioned ZIP in `dist/`, with pinned runtimes and companion third-party sources.
+versioned app-only ZIP in `dist/`, plus a separate corresponding-sources ZIP.
 Build the bundle before running its integration test; otherwise that test skips.
 User data, dependencies, temporary builds, generated apps, and releases are ignored.
 

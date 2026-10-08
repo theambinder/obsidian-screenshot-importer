@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { UpdateManager, REPOSITORY, compareVersions, normalizeReleases } from '../src/updates.mjs';
 import { createAppServer } from '../src/server.mjs';
 import { resolveConfig } from '../src/config.mjs';
+import { APP_VERSION } from '../src/version.mjs';
 
 const exec = promisify(execFile);
 const content = Buffer.from('disposable verified update');
@@ -52,6 +53,9 @@ test('missing digests, wrong repositories, unknown filenames, and oversized asse
     Object.assign(row.assets[0], change);
     assert.equal(normalizeReleases([row], '1.5.0')[0].asset, null);
   }
+  const row = release();
+  row.assets.unshift({ ...row.assets[0], name: 'Obsidian-Screenshot-Importer-1.6.0-Sources.zip' });
+  assert.equal(normalizeReleases([row], '1.5.0')[0].asset.name, 'Obsidian-Screenshot-Importer-1.6.0-Apple-Silicon.zip');
 });
 
 test('updates make no requests on construction and share concurrent checks without transmitting local paths', async (t) => {
@@ -189,6 +193,10 @@ test('native update validation checks archive/bundle/version/signature and never
   const args = [String(process.pid), old, archive, '1.6.0', hash, root, 'validate-only'];
   const result = await exec(helper, args);
   assert.equal(JSON.parse(result.stdout).type, 'validated');
+  // App-only ZIPs must remain compatible with the first native updater.
+  await exec('/usr/bin/ditto', ['--noextattr', '--norsrc', '-c', '-k', '--keepParent', incoming, archive]);
+  args[4] = createHash('sha256').update(await fs.readFile(archive)).digest('hex');
+  assert.equal(JSON.parse((await exec(helper, args)).stdout).type, 'validated');
   assert.equal(await fs.readFile(path.join(old, 'untouched'), 'utf8'), 'old application');
   assert.equal((await fs.readdir(root)).some((name) => name.startsWith('.obsidian-importer-update')), false);
   for (const change of [{ index: 3, value: '1.7.0', error: /identity or version/ }, { index: 4, value: '0'.repeat(64), error: /checksum/ }]) {
@@ -204,4 +212,24 @@ test('native update validation checks archive/bundle/version/signature and never
   args[4] = createHash('sha256').update(await fs.readFile(archive)).digest('hex');
   await assert.rejects(exec(helper, args), (error) => { assert.match(error.stdout, /Symbolic/); return true; });
   assert.equal(await fs.readFile(path.join(old, 'untouched'), 'utf8'), 'old application');
+});
+
+test('release ZIP contains only the app; corresponding sources are a separate asset', { timeout: 30000 }, async (t) => {
+  if (process.platform !== 'darwin') return t.skip('macOS distribution');
+  const appArchive = path.resolve(`dist/Obsidian-Screenshot-Importer-${APP_VERSION}-Apple-Silicon.zip`);
+  const sourceArchive = path.resolve(`dist/Obsidian-Screenshot-Importer-${APP_VERSION}-Sources.zip`);
+  const { stdout: listing } = await exec('/usr/bin/unzip', ['-Z1', appArchive]);
+  const entries = listing.trim().split('\n');
+  assert.ok(entries.length > 1);
+  assert.deepEqual([...new Set(entries.map((name) => name.split('/')[0]))], ['Obsidian Screenshot Importer.app']);
+  assert.equal(entries.some((name) => /(^|\/)Sources[^/]*\.zip$/.test(name)), false);
+  const prefix = 'Obsidian Screenshot Importer.app/Contents/Resources/Licenses/';
+  for (const name of ['FFmpeg.txt', 'WebP.txt', 'Node.txt', 'Source-Access.txt']) assert.ok(entries.includes(prefix + name));
+  const { stdout: access } = await exec('/usr/bin/unzip', ['-p', appArchive, prefix + 'Source-Access.txt']);
+  assert.ok(access.includes(`${repository}/releases/download/v${APP_VERSION}/Obsidian-Screenshot-Importer-${APP_VERSION}-Sources.zip`));
+  const { stdout: sources } = await exec('/usr/bin/unzip', ['-Z1', sourceArchive]);
+  for (const name of ['Sources/ffmpeg-7.1.5.tar.xz', 'Sources/libwebp-1.6.0.tar.gz', 'Sources/ffmpeg-build-config.txt', 'Sources/scripts/build-ffmpeg.sh']) {
+    assert.ok(sources.split('\n').includes(name));
+  }
+  assert.doesNotMatch(sources, /AGENTS\.local\.md|config\.log|README\.ru\.md|setup-macos\.zsh|launcher\.zsh/);
 });

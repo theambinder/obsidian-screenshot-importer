@@ -41,12 +41,19 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMenus()
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
+        let available = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+        let initialWidth = min(1240, available.width * 0.9)
+        let initialHeight = min(780, available.height * 0.8, initialWidth * 0.66)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: initialWidth, height: initialHeight),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = name
         window.minSize = NSSize(width: 560, height: 440)
-        window.setFrameAutosaveName("MainWindow")
-        window.center()
+        // Disposable profiles must not overwrite the normal application's window state.
+        let environment = ProcessInfo.processInfo.environment
+        let isolated = environment["OBSIDIAN_SCREENSHOTS_PROFILE"] != nil || environment["OBSIDIAN_SCREENSHOTS_SUPPORT"] != nil
+        let frameName = isolated ? "MainWindow-\(profileURL.path)" : "MainWindow"
+        window.setFrameAutosaveName(frameName)
+        if !window.setFrameUsingName(frameName) { window.center() }
         window.delegate = self
         window.isReleasedWhenClosed = false
         let configuration = WKWebViewConfiguration()
@@ -361,7 +368,7 @@ final class DesktopApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     @objc private func openLog() { NSWorkspace.shared.open(supportURL.appendingPathComponent("desktop.log")) }
     @objc private func showAbout() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: name, .applicationVersion: version, .version: "Apple Silicon", .credits: NSAttributedString(string: "Local screenshot importer with optional GitHub release updates. Bundled Node.js, WebP, and FFmpeg. Licenses and corresponding sources accompany the distribution.")])
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: name, .applicationVersion: version, .version: "Apple Silicon", .credits: NSAttributedString(string: "Map image folders to Obsidian notes. Bundled Node.js, WebP, and FFmpeg (LGPLv2.1). Licenses are included; corresponding sources are available separately on GitHub Releases.")])
     }
 
     @objc private func checkUpdates() {

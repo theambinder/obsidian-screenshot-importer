@@ -40,8 +40,7 @@ fi
 
 STAGING="$(mktemp -d "${TMPDIR:-/tmp}/obsidian-screenshot-build.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
-RELEASE="$STAGING/Obsidian Screenshot Importer $VERSION"
-APP="$RELEASE/Obsidian Screenshot Importer.app"
+APP="$STAGING/Obsidian Screenshot Importer.app"
 RES="$APP/Contents/Resources"
 SOURCES="$STAGING/Sources"
 mkdir -p "$APP/Contents/MacOS" "$RES/bin" "$RES/app" "$RES/Licenses" "$SOURCES"
@@ -71,6 +70,8 @@ cp build/vendor/node-v24.21.0-darwin-arm64/LICENSE "$RES/Licenses/Node.txt"
 cp build/vendor/ffmpeg-7.1.5/COPYING.LGPLv2.1 "$RES/Licenses/FFmpeg.txt"
 cp build/vendor/libwebp-1.6.0/COPYING "$RES/Licenses/WebP.txt"
 cp build/vendor/libwebp-1.6.0/PATENTS "$RES/Licenses/WebP-PATENTS.txt"
+printf 'Corresponding FFmpeg/WebP sources and build materials for version %s:\nhttps://github.com/theambinder/obsidian-screenshot-importer/releases/download/v%s/Obsidian-Screenshot-Importer-%s-Sources.zip\n\nFFmpeg is distributed under LGPLv2.1. The Sources archive is not required to run the application. Redistribution must retain corresponding source access and third-party notices.\n' \
+  "$VERSION" "$VERSION" "$VERSION" > "$RES/Licenses/Source-Access.txt"
 cp build/downloads/libwebp-1.6.0.tar.gz "$SOURCES/"
 cp build/downloads/ffmpeg-7.1.5.tar.xz "$SOURCES/"
 # config.log contains the developer's full environment; distribute flags only.
@@ -81,8 +82,8 @@ cp macos/*.swift macos/*.c macos/*.plist "$SOURCES/macos/"
 cp package.json .gitignore .gitattributes AGENTS.md README.md PROJECT.md AUDIT.md PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$SOURCES/"
 cp -R .github "$SOURCES/"
 cp -R "$RES/Licenses" "$SOURCES/"
-/usr/bin/ditto -c -k --keepParent "$SOURCES" "$RELEASE/Sources-$VERSION.zip"
-cp PORTABLE-APP.md CHANGELOG.md PERFORMANCE.md "$RELEASE/"
+SOURCE_ZIP="$ROOT/dist/Obsidian-Screenshot-Importer-$VERSION-Sources.zip"
+/usr/bin/ditto --noextattr --norsrc -c -k --keepParent "$SOURCES" "$SOURCE_ZIP"
 
 # A portable build must not accidentally depend on the developer's Homebrew.
 for binary in "$RES/bin/"* "$APP/Contents/MacOS/"*; do
@@ -97,5 +98,5 @@ for binary in "$RES/bin/"*; do /usr/bin/codesign --force --sign - "$binary"; don
 if [[ -d "$ROOT/dist/Obsidian Screenshot Importer.app" ]]; then rm -rf "$ROOT/dist/Obsidian Screenshot Importer.app"; fi
 /usr/bin/ditto --noextattr "$APP" "$ROOT/dist/Obsidian Screenshot Importer.app"
 ZIP="$ROOT/dist/Obsidian-Screenshot-Importer-$VERSION-Apple-Silicon.zip"
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$RELEASE" "$ZIP"
-printf '\nBuilt: %s\n' "$ZIP"
+/usr/bin/ditto --noextattr --norsrc -c -k --keepParent "$APP" "$ZIP"
+printf '\nBuilt: %s\nCorresponding sources: %s\n' "$ZIP" "$SOURCE_ZIP"

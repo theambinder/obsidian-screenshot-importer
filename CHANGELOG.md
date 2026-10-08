@@ -4,6 +4,14 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.5.1 - 2026-10-08
+
+- Package only Obsidian Screenshot Importer.app in the main download ZIP, without a release wrapper folder, loose Markdown files, or nested source archive. Publish matching FFmpeg/WebP sources and build materials as a separate optional Sources asset; retain notices and an exact source-download link inside the app.
+- Clarify the repository and README description: map image folders to Obsidian notes, then batch-import with compression, episode organization, and rollback.
+- Extend the table and service headers to the window edges at every screen width. Remove external side gutters and the page-width cap while retaining spacing inside cells and controls in both themes.
+- Open a fresh installation in a screen-aware landscape window. Restore the last saved size and position on subsequent launches, without recentering it. Isolate disposable test-profile window state from the normal application.
+- Cover the app-only archive layout, separate source materials, and compatibility with the 1.5.0 native update installer. Existing data and import behavior are unchanged.
+
 ## 1.5.0 - 2026-10-08
 
 - Add Settings > Update and the native Check for Updates menu. List stable GitHub releases, installed/new versions, dates, and release notes in a compact window.

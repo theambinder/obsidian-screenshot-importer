@@ -24,4 +24,5 @@ requirements and implementation decisions; CHANGELOG.md records releases.
   preferences. It is intentionally ignored and must never be distributed.
 
 The project currently has no project-wide license. Preserve all bundled
-third-party notices and the companion FFmpeg/WebP sources in release archives.
+third-party notices inside the app and publish matching FFmpeg/WebP sources as a
+separate asset alongside each application ZIP. The main ZIP contains only the app.

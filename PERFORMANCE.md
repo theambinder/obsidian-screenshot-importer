@@ -14,6 +14,14 @@ The remaining size is mostly the JavaScript runtime. A substantially smaller nat
 
 The rebuilt 1.1.0 `.app` totals approximately **103.4 MB** of file contents, about **28% smaller**. The complete distribution ZIP remains approximately **53.4 MB** because it also includes the companion source archive. MB here means decimal megabytes; filesystem tools reporting MiB will show lower numbers.
 
+## Download Packaging: 1.5.1
+
+From 1.5.1, the main download contains only the app. Corresponding FFmpeg/WebP
+sources and build materials are a separate optional Sources release asset, not
+part of the application download or in-app update. This reduces transferred bytes
+without removing runtimes, codecs, license notices, or functionality. The installed
+app size is essentially unchanged; the 1.1.0 measurements above remain historical.
+
 ## Conversion Benchmark
 
 Measured on this Apple Silicon Mac (14 available CPU cores, 48 GiB memory), two runs per mode. Twelve original screenshots were copied into a disposable local test vault: six 1920x1080 anime frames at WebP Q50, and six 3840x2160 live-action frames at WebP Q90. Effort remained 6; no resize or new image processing was applied.

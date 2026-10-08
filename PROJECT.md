@@ -1,12 +1,12 @@
 # Project Specification
 
-Current version: **1.5.0**. The authoritative version is `package.json`.
+Current version: **1.5.1**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
 
 Obsidian Screenshot Importer is a standalone Apple Silicon macOS application for
-batch-importing screenshots and images into existing media notes. Images may come
+mapping image folders to existing media notes and batch-importing their contents. Images may come
 from any player, game, capture application, or other source. Obsidian and its Image
 Converter plugin are not required for conversion or Markdown editing.
 
@@ -177,7 +177,8 @@ deletion. Restoring from Trash is possible until the Trash is emptied.
   System/Light/Dark, follows OS changes when System is selected, and persists.
 - Navigation: each section retains independent scroll state for the window session;
   double-clicking its tab goes to the top. Late renders must not undo later scrolls.
-- Layout: centered width-constrained desktop surface; compact narrow rows without
+- Layout: edge-to-edge table and service headers with internal content spacing;
+  compact narrow rows without
   horizontal overflow. Service/progress, section, and table headers remain sticky
   without transparent gaps. Navigation and process actions occupy separate rows.
 
@@ -194,6 +195,11 @@ server rejects cross-origin/nonlocal requests and non-JSON mutation requests.
 Folder and image links use validated existing paths. Preview windows do not quit
 the application; closing the main window or Cmd+Q does. Pending settings writes
 are flushed before shutdown. No developer tools are needed on the destination Mac.
+
+The first window opens in a screen-aware landscape size. Subsequent launches restore
+the saved size and position instead of recentering. The production MainWindow key
+remains compatible; explicit test profiles use separate frame keys so native UI tests
+cannot change production window geometry.
 
 ## GitHub Updates
 
@@ -230,8 +236,10 @@ copies require a manual move to a local Applications folder.
 
 The repeatable Apple Silicon build pins Node.js, WebP, and minimal LGPL FFmpeg,
 compiles native helpers, checks dynamic dependencies, signs outside synchronized
-storage, and creates versioned ZIPs. Matching codec sources, third-party notices,
-and English project sources accompany each release. Generated builds, personal
+storage, and creates an app-only versioned ZIP. Matching codec sources and English
+project sources are published as a separate Sources ZIP on the same release;
+third-party notices and the exact source-download link remain inside the app.
+The updater selects only the application ZIP. Generated builds, personal
 data, local instructions, and release archives are excluded from Git.
 
 Tests use disposable source/vault/history fixtures only. Native WKWebView checks

@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.5.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, open the release folder, and drag **Obsidian Screenshot Importer.app** into **Applications**. Keep a local copy of the app on each Mac, rather than launching a partially downloaded app bundle from iCloud. The companion `Sources-1.5.0.zip` is not required to run the app; it accompanies the distribution for source access and redistribution.
+1. Download `Obsidian-Screenshot-Importer-1.5.1-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.5.1-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -42,6 +42,8 @@ Only one Mac should operate on synchronized data at a time, after iCloud has fin
 
 The existing Screenshots, History, Settings, compression previews, native Trash, and rollback features run in a WKWebView window. Image links open separate **Image Preview** windows. Closing an image window does not quit the app; closing the main window does. Obsidian note links open the installed Obsidian app. macOS can ask the app for permission to access protected folders or Trash.
 
+The first launch uses a landscape window fitted to the available screen. Later launches restore the last window size and position, including a manually chosen portrait size. Existing saved geometry is retained during updates. The table and service headers extend to the window edges; spacing stays inside cells and controls.
+
 Each section remembers its own scroll position for the current window session. Single-click a section to return to that position, or double-click to go to the top. A new app session starts fresh; these positions are not written to shared settings or history.
 
 The backend listens only on `127.0.0.1` on an automatically assigned free port. No fixed port 3787 and no globally installed tools are required. It is owned by the native app and is shut down via a private pipe. If the host disappears unexpectedly, the backend waits for an active mutation to finish, then exits. A hard OS shutdown cannot be made transactional; retain source archives until checking the result.
@@ -62,7 +64,7 @@ Official upstream dependencies:
 - [WebP 1.6.0](https://developers.google.com/speed/webp/download), official standalone macOS arm64 cwebp.
 - [FFmpeg 7.1.5](https://ffmpeg.org/releases/), minimal LGPL static build, no network codecs or Homebrew libraries. PNG/JPEG output, PNG/JPEG/TIFF/BMP/WebP/GIF input, file protocol only; screenshot processing, not a general-purpose FFmpeg distribution.
 
-WebP/FFmpeg archive hashes were pinned from the initial HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`. Matching FFmpeg/WebP source archives, native/frontend/backend sources, and build configuration are in the companion `Sources-VERSION.zip` within the main distribution ZIP. That source archive must accompany redistribution. Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. Network connections are limited to explicitly requested GitHub update checks and downloads.
+WebP/FFmpeg archive hashes were pinned from the initial HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`, with the exact corresponding-source download link in `Source-Access.txt`. Matching FFmpeg/WebP source archives, native/frontend/backend sources, and build configuration are published as `Obsidian-Screenshot-Importer-VERSION-Sources.zip`, a separate asset on the same GitHub release. From 1.5.1 the main ZIP contains only the application, and updates do not download source materials. Redistribution must retain third-party notices and corresponding source access; see [FFmpeg's distribution guidance](https://ffmpeg.org/legal.html). Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. Network connections are limited to explicitly requested GitHub update checks and downloads.
 
 From 1.1.0, the build strips only debug/local symbol tables from Node before signing; it does not remove ICU, runtime code, or image codecs. This reduces installed size without requiring dependencies on the destination Mac. Symbols are still available in the pinned upstream Node archive for low-level debugging.
 
