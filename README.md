@@ -11,6 +11,8 @@ Images can come from any player, game, or other source.
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/ambinder)
 
+![Obsidian Screenshot Importer showing image folders mapped to notes in dark mode](docs/images/screenshots-dark.png)
+
 ## Get Started
 
 Requires **Apple Silicon (M1 or later)** and **macOS 13.5 or later**.
