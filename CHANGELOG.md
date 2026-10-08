@@ -10,7 +10,7 @@ This file is the public release history. Checkouts with a private `AGENTS.local.
 - Download compatible Apple Silicon updates with visible progress and mandatory size/SHA-256 verification. Restrict the repository, filenames, release channel, HTTPS redirects, response sizes, and timeouts; exclude downgrades and remote HTML.
 - Add Install and Restart with native bundle/version/architecture/signature validation, staged replacement after graceful shutdown, previous-copy recovery, and backend-startup confirmation. No administrator privileges, background checks, account, telemetry, or vault-data uploads are required.
 - Block overlapping update downloads, imports, rollback, archive deletion, and installation. Preserve all external settings, profiles, history, screenshots, and vault files.
-- Remove the Russian README and translate the detailed specification into formal English. Retain only the funding button in the README and GitHub's funding sidebar link.
+- Translate the detailed specification into formal English. Retain only the funding button in the README and GitHub's funding sidebar link.
 - Remove legacy shell launcher/templates, Homebrew setup, npm start, and the standalone production server entrypoint. Retain reproducible application builds, developer tests, and data compatibility paths.
 - Verify all 95 automated tests, a checksum-verified GitHub download, and the complete native download/install/restart cycle using disposable fixtures. Confirm settings preservation and previous-copy cleanup without importing or modifying real media data.
 
