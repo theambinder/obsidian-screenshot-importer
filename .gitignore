@@ -1,0 +1,19 @@
+# User data and local preferences
+/data/
+/AGENTS.local.md
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+
+# Generated dependencies, fixtures, applications, and releases
+node_modules/
+/tmp/
+/build/
+/dist/
+/macos/*.app/
+
+# macOS metadata
+.DS_Store
+._*
