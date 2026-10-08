@@ -176,3 +176,22 @@ test('rollback reports phases and checkpoints, including skipped and failed fold
   assert.ok(events.some((event) => /checking references/.test(event.current)));
   assert.ok(events.some((event) => /processed B/.test(event.current)));
 });
+
+test('invalid item rollback requests never start a full-run rollback and release the lock', async (t) => {
+  const f = await fixture(t);
+  await f.source('A');
+  const imported = new ImportJob(f.config, { items: [f.item('A')], conversion: { format: 'original' } });
+  await imported.run();
+  assert.equal(imported.status, 'done');
+  const before = await fs.readFile(path.join(f.config.mediaRoot, 'Series/Show.md'), 'utf8');
+  for (const sourceFolderName of [undefined, null, '', false, '../A', 'A/B']) {
+    const response = await f.post('/api/rollback-item', { runId: imported.id, sourceFolderName, background: true });
+    assert.equal(response.ok, false);
+    assert.equal(f.server.isBusy(), false);
+    assert.equal((await f.get('/api/active-job')).job, null);
+    assert.equal(await fs.readFile(path.join(f.config.mediaRoot, 'Series/Show.md'), 'utf8'), before);
+    assert.equal((await f.get('/api/runs')).runs[0].status, 'done');
+  }
+  const valid = await f.post('/api/rollback-item', { runId: imported.id, sourceFolderName: 'A', background: true });
+  assert.equal((await finished(f, (await valid.json()).jobId)).job.status, 'done');
+});

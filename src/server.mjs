@@ -253,6 +253,8 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/rollback-item' && req.method === 'POST') {
     const payload = await readBody(req);
+    // A missing folder must never turn an item request into a full-run rollback.
+    pathComponent(payload.sourceFolderName, 'source folder');
     if (payload.background) {
       const job = new RollbackJob(config, payload);
       startJob(job);

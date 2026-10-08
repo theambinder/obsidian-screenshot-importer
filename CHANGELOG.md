@@ -4,6 +4,11 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.4.1 - 2026-10-08
+
+- Reject missing, empty, non-string, and traversal folder names at the item-rollback endpoint before starting a background job. A malformed item request must never become a whole-run rollback.
+- Add regression coverage proving invalid requests leave notes, archives, job state, and locks unchanged, while a subsequent valid item rollback still works. All 84 tests pass against the rebuilt portable bundle.
+
 ## 1.4.0 - 2026-10-08
 
 - Rename the native app, window, menus, web interface, and distribution to Obsidian Screenshot Importer. Retain legacy support paths and bundle identifiers so profiles and history survive the rename.

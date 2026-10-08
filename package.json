@@ -1,6 +1,6 @@
 {
   "name": "obsidian-screenshot-importer",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "description": "Import screenshots and images into Obsidian media notes with matching, compression, episode organization, and rollback.",

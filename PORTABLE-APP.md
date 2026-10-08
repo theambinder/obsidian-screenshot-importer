@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.4.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to the other Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, open the release folder, and drag **Obsidian Screenshot Importer.app** into **Applications**. Keep a local copy of the app on each Mac, rather than launching a partially downloaded app bundle from iCloud. The companion `Sources-1.4.0.zip` is not required to run the app; keep it with the distribution for source access and redistribution.
+1. Download `Obsidian-Screenshot-Importer-1.4.1-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to the other Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, open the release folder, and drag **Obsidian Screenshot Importer.app** into **Applications**. Keep a local copy of the app on each Mac, rather than launching a partially downloaded app bundle from iCloud. The companion `Sources-1.4.1.zip` is not required to run the app; keep it with the distribution for source access and redistribution.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -88,6 +88,8 @@ The generated `macos/Obsidian Screenshot Importer.app` is a **legacy launcher**,
 ## Verification (2026-09-18)
 
 Release 1.4.0 verification (2026-10-08): all 83 tests pass, including the packaged-backend test. The transfer ZIP was extracted outside iCloud and passed strict deep signature verification. A disposable native profile confirmed grouped mode changes, S2E0 and Season 3 episode detection, the editable output folder, Size sorting, and the compact window layout. A 1,001-image import and full rollback completed with results and disabled mutation buttons. No real screenshots/Media notes/history were used. The test app and owned backend exited cleanly. No second physical Mac was available.
+
+Release 1.4.1 additionally rejects malformed item-rollback requests before starting a job. All 84 tests pass against the rebuilt bundle, including the case where a missing folder must not trigger a full-run rollback.
 
 - 43 automated tests pass, including import/rollback, desktop lifecycle, all conflict policies under parallel encoding, encoder failure, scratch cleanup, worker limits, saved settings, and matching native/backend version metadata.
 - Packaged tests use only bundled executables plus `/usr/bin:/bin:/usr/sbin:/sbin`, an unrelated working directory, and disposable source/vault/history directories. WebP, JPEG, PNG, and original previews return real image bytes. An active seven-file import finishes before process exit, and rollback succeeds after restarting.
