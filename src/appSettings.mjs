@@ -3,6 +3,7 @@ import { normalizeParallelImages } from './conversionBatch.mjs';
 import { normalizeTheme } from '../public/theme.js';
 import { normalizeImageFolderTemplate } from './imageFolder.mjs';
 import { mediaNotePath } from './paths.mjs';
+import { normalizeDuplicateMode } from '../public/imageSelection.js';
 
 const DEFAULT_QUALITY_BY_MEDIA_DIR = {
   Anime: 50,
@@ -50,6 +51,7 @@ function normalizeAppSettings(config, input = {}) {
     mediaDirs: config.mediaDirs,
     qualityDefaults,
     parallelImages: normalizeParallelImages(input.parallelImages),
+    duplicateMode: normalizeDuplicateMode(input.duplicateMode),
     theme: normalizeTheme(input.theme),
     imageFolderTemplate: normalizeImageFolderTemplate(input.imageFolderTemplate ?? config.attachmentsTemplate ?? 'All Notes/Attachments/{notename}'),
     noteModes,

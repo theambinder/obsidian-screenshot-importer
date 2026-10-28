@@ -26,9 +26,9 @@ Requires **Apple Silicon (M1 or later)** and **macOS 13.5 or later**.
    An active operation finishes before shutdown.
 
 The main ZIP contains only **Obsidian Screenshot Importer.app**, including Node.js,
-cwebp, and FFmpeg; no separate installation is needed. The optional
+cwebp, FFmpeg, and the HDR JXR decoder; no separate installation is needed. The optional
 [Sources archive](https://github.com/theambinder/obsidian-screenshot-importer/releases/latest)
-is a separate release asset with corresponding FFmpeg/WebP sources and build materials.
+is a separate release asset with corresponding FFmpeg/WebP/AOM/zimg/jxrlib sources and build materials.
 FFmpeg is distributed under LGPLv2.1; license notices remain inside the app.
 Image processing works offline. Optional update checks contact GitHub only when requested.
 The app is ad-hoc signed, not notarized; macOS may require
@@ -42,8 +42,10 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 - Detect seasons and episodes, including episode zero. Change Work/Episode for all
   folders sharing a Note, with remembered per-note mode and individual number detection. Keep episodes in numeric
   order, reuse padded/commented headings, and preserve existing note text.
-- Convert to WebP, JPEG, PNG, or keep originals. Preserve filenames and dimensions;
+- Convert to WebP, JPEG, PNG, AVIF, or keep SDR originals. Preserve filenames and dimensions;
   preview original/converted images and detail crops before applying quality.
+- Convert HDR JXR captures to 10-bit 4:4:4 PQ AVIF. Select JXR only (default), PNG only,
+  or Both for same-name pairs; archive and restore all originals, including unconverted counterparts.
 - Set category defaults and per-note quality; convert batches in parallel.
 - Insert Obsidian embeds into the correct work or episode section and place images
   in the configurable **Settings > Image Folder** (default `All Notes/Attachments/{notename}/`).
@@ -77,6 +79,28 @@ in the separate data folder, which is excluded from Git and release archives.
 Sharing that folder between Macs requires the same paths for old rollback history;
 use one Mac at a time and let synchronization finish before switching.
 
+## HDR Captures and Paired Originals
+
+Floating-point linear scRGB `.jxr` captures are converted to HDR AVIF, regardless of
+**Default Format**. Ordinary PNG/JPEG images still use that default. The AVIF quality
+scale runs from 1 to 100; **Quality 40 = CRF 16**. Lower CRF preserves more detail.
+Compression Preview shows the actual CRF, HDR reference, converted image, and file sizes.
+Category quality defaults and per-note overrides are retained; HDR does not reset them.
+
+**Settings > JXR / PNG Pairs** sets the default for files sharing a basename in the
+same folder. Individual folders and Compression Preview can override it. The choice
+affects paired files only, not unrelated or unpaired images. With **Both** and AVIF output,
+the PNG counterpart uses `.sdr.avif` to avoid overwriting the HDR `.avif`.
+
+Every source file moves to the archive after a successful import. **Trash** includes
+unconverted counterparts, and **Rollback** restores them. Keep archives until the
+imported images have been checked. Originals are never deleted during conversion.
+
+HDR appearance depends on the display, macOS, and image viewer. The JXR reference is
+rendered as 16-bit PQ PNG because WebKit cannot decode JXR directly; it is not an SDR
+tone map. No extra brightness compensation is baked into AVIF. Integer, transparent,
+and ICC-tagged JXR files are rejected rather than silently misinterpreted as scRGB.
+
 ## Updates
 
 Open **Settings > Update** or the application menu's **Check for Updates...**.
@@ -94,7 +118,8 @@ Versions before 1.5.0 require one manual installation of a release with the upda
 
 ## Development
 
-Clone the repository on an Apple Silicon Mac with Apple's Command Line Tools:
+Clone the repository on an Apple Silicon Mac with Apple's Command Line Tools and
+CMake, pkg-config, autoconf, automake, and GNU libtool available for codec builds:
 
 ```sh
 git clone https://github.com/theambinder/obsidian-screenshot-importer.git
@@ -102,8 +127,8 @@ cd obsidian-screenshot-importer
 /bin/bash scripts/build-macos-app.sh
 ```
 
-The build downloads checksum-pinned Node.js, WebP, and FFmpeg distributions and
-bundles the required executables. No Homebrew or dependency installer is supplied.
+The build downloads checksum-pinned Node.js, WebP, FFmpeg, AOM, zimg, and jxrlib sources/distributions and
+bundles the required executables. Build tools are not required on destination Macs.
 The JavaScript application has no npm dependencies. Production launch is through
 the built application, not a standalone browser service or legacy launcher.
 

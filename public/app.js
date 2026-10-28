@@ -3,6 +3,7 @@ import { normalizeTheme, resolveTheme } from './theme.js';
 import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicateEpisodes } from './episodeSelection.js';
 import { createTabScroll } from './tabScroll.js';
 import { createUpdates } from './updates.js';
+import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualityToCrf } from './imageSelection.js';
 
 const state = {
   config: null,
@@ -130,6 +131,12 @@ els.doneOkButton.addEventListener('click', hideDoneModal);
 els.closePreviewButton.addEventListener('click', hidePreviewModal);
 els.applyPreviewQualityButton.addEventListener('click', applyPreviewQuality);
 els.previewFormatSelect.addEventListener('change', handlePreviewEncoderChange);
+$('#duplicateModeSelect').addEventListener('change', (event) => {
+  state.settings.duplicateMode = normalizeDuplicateMode(event.target.value);
+  renderFolders();
+  scheduleSettingsSave();
+});
+$('#previewDuplicateModeSelect').addEventListener('change', renderPreviewFileList);
 els.previewQualityInput.addEventListener('input', schedulePreviewConversion);
 els.previewEffortSelect.addEventListener('change', handlePreviewEncoderChange);
 els.previewSuggestedQualityButton.addEventListener('click', useSuggestedPreviewQuality);
@@ -309,6 +316,7 @@ async function loadSettings() {
   $('#appVersion').textContent = `v${state.settings.appVersion}`;
   $('#parallelImagesSelect').value = String(state.settings.parallelImages || 0);
   $('#parallelImagesSelect').options[0].textContent = `Auto (${state.settings.autoParallelImages})`;
+  $('#duplicateModeSelect').value = normalizeDuplicateMode(state.settings.duplicateMode);
   renderQualityDefaultsFields();
 }
 
@@ -345,7 +353,7 @@ function scheduleSettingsSave() {
 }
 
 async function saveSettings() {
-  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
+  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, duplicateMode: state.settings.duplicateMode, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
   state.settingsSave = state.settingsSave.catch(() => {}).then(() => api('/api/settings', {
     method: 'POST',
     body,
@@ -391,6 +399,14 @@ function clampQuality(value, fallback) {
 
 function qualityValue(folder) {
   return clampQuality(folder.quality, defaultQualityForFolder(folder));
+}
+
+function duplicateModeForFolder(folder) {
+  return normalizeDuplicateMode(folder.duplicateMode ?? state.settings.duplicateMode);
+}
+
+function selectedNamesForFolder(folder) {
+  return selectImageNames((folder.images || []).map((image) => image.name), duplicateModeForFolder(folder));
 }
 
 function qualityTitle(folder) {
@@ -469,6 +485,13 @@ function renderFolderRows() {
           <button class="icon-button open-source" type="button" title="Open source folder" aria-label="Open source folder"><span class="ui-icon icon-folder" aria-hidden="true"></span></button>
         </div>
         <div class="source-meta">${escapeHtml(formatFolderMeta(folder))}</div>
+        ${duplicatePairs(folder.images.map((image) => image.name)).length ? `
+          <div class="source-pair-options">
+            <select class="duplicate-mode" aria-label="JXR / PNG pairs for ${escapeAttr(folder.name)}" title="Same-name JXR / PNG pairs; all originals are archived">
+              ${['jxr', 'png', 'both'].map((mode) => `<option value="${mode}" ${mode === duplicateModeForFolder(folder) ? 'selected' : ''}>${mode === 'both' ? 'Both' : `${mode.toUpperCase()} only`}</option>`).join('')}
+            </select>
+            <span>${formatUnit(selectedNamesForFolder(folder).length, 'selected image')}</span>
+          </div>` : ''}
       </td>
       <td class="size-cell" data-label="Size">${escapeHtml(formatBytes(folder.totalBytes || 0))}</td>
       <td class="note-cell">
@@ -530,6 +553,10 @@ function renderFolderRows() {
     });
     tr.querySelector('.open-source').addEventListener('click', () => openSourceFolder(folder.name));
     tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch(showFatal));
+    tr.querySelector('.duplicate-mode')?.addEventListener('change', (event) => {
+      folder.duplicateMode = normalizeDuplicateMode(event.target.value);
+      renderFolders();
+    });
     openNoteButton.addEventListener('click', () => openSelectedNote(folder));
     rowQualityInput.addEventListener('change', () => {
       const quality = clampQuality(rowQualityInput.value, defaultQuality());
@@ -598,7 +625,7 @@ function updateFolderSelection() {
 
 function renderSelectionSummary() {
   const selected = state.folders.filter((folder) => folder.enabled).length;
-  const files = state.folders.filter((folder) => folder.enabled).reduce((sum, folder) => sum + folder.imageCount, 0);
+  const files = state.folders.filter((folder) => folder.enabled).reduce((sum, folder) => sum + selectedNamesForFolder(folder).length, 0);
   const summary = state.screenshotsSummary || summarizeVisibleFolders();
   els.selectionSummary.textContent = `${formatUnit(summary.folderCount, 'folder')} · ${formatUnit(summary.imageCount, 'screenshot')} · ${formatBytes(summary.bytes)} · ${formatCount(selected)} selected · ${formatUnit(files, 'selected screenshot')}`;
 }
@@ -777,6 +804,11 @@ async function openPreviewModal(folder) {
   els.previewStatus.textContent = '';
   hideSuggestedQuality();
   els.previewFormatSelect.value = els.formatSelect.value;
+  state.preview.standardFormat = els.formatSelect.value;
+  els.previewFormatSelect.disabled = false;
+  $('#previewCrf').textContent = '';
+  $('#previewDuplicateModeSelect').value = duplicateModeForFolder(folder);
+  $('#previewDuplicateField').hidden = !duplicatePairs(folder.images.map((image) => image.name)).length;
   els.previewQualityInput.value = qualityValue(folder);
   els.previewEffortSelect.value = els.effortSelect.value;
   els.previewModal.hidden = false;
@@ -808,11 +840,12 @@ function hidePreviewModal() {
 
 function renderPreviewFileList() {
   const selected = state.preview.selectedFile?.name;
+  const included = new Set(selectImageNames(state.preview.files.map((file) => file.name), $('#previewDuplicateModeSelect').value));
   els.previewFileList.innerHTML = state.preview.files.map((file) => `
-    <button class="preview-file ${file.name === selected ? 'active' : ''}" type="button" data-file="${escapeAttr(file.name)}" title="${escapeAttr(file.name)}">
-      <img src="${escapeAttr(file.url)}" alt="" loading="lazy">
+    <button class="preview-file ${file.name === selected ? 'active' : ''} ${included.has(file.name) ? '' : 'excluded-file'}" type="button" data-file="${escapeAttr(file.name)}" title="${escapeAttr(file.name)}">
+      <img src="${escapeAttr(file.thumbnailUrl || file.url)}" alt="" loading="lazy">
       <span>${escapeHtml(file.name)}</span>
-      <small>${escapeHtml(file.size)}</small>
+      <small>${escapeHtml(file.size)}${included.has(file.name) ? '' : ' · Skipped'}</small>
     </button>
   `).join('');
   els.previewFileList.querySelectorAll('.preview-file').forEach((button) => {
@@ -824,13 +857,16 @@ function selectPreviewFile(fileName) {
   const file = state.preview.files.find((candidate) => candidate.name === fileName);
   if (!file) return;
   state.preview.selectedFile = file;
+  els.previewFormatSelect.disabled = isJxr(file.name);
+  els.previewFormatSelect.value = isJxr(file.name) ? 'avif' : state.preview.standardFormat;
+  els.previewFormatSelect.title = isJxr(file.name) ? 'JXR output is always HDR AVIF' : '';
   state.preview.suggestedQuality = null;
   renderPreviewFileList();
   els.previewOriginalImage.src = file.url;
   els.previewOriginalCropImage.src = file.url;
   setPreviewLink(els.previewOriginalLink, file.url);
   setPreviewLink(els.previewOriginalCropLink, file.url);
-  els.previewOriginalMeta.textContent = `${file.name} · ${file.size}`;
+  els.previewOriginalMeta.textContent = `${file.name} · ${file.size}${file.hdr ? ' · HDR reference' : ''}`;
   els.previewConvertedImage.removeAttribute('src');
   els.previewConvertedCropImage.removeAttribute('src');
   setPreviewLink(els.previewConvertedLink, '');
@@ -842,6 +878,10 @@ function selectPreviewFile(fileName) {
 }
 
 function schedulePreviewConversion() {
+  const avif = els.previewFormatSelect.value === 'avif';
+  $('#previewCrf').textContent = avif ? `· CRF ${qualityToCrf(els.previewQualityInput.value)}` : '';
+  $('#previewCrf').title = avif ? 'Quality 40 = CRF 16; lower CRF preserves more detail' : '';
+  els.previewEffortSelect.disabled = els.previewFormatSelect.value !== 'webp';
   state.preview.conversionController?.abort();
   clearTimeout(state.preview.timer);
   const requestId = state.preview.requestId + 1;
@@ -853,7 +893,8 @@ function schedulePreviewConversion() {
   }, 250);
 }
 
-function handlePreviewEncoderChange() {
+function handlePreviewEncoderChange(event) {
+  if (event?.target === els.previewFormatSelect) state.preview.standardFormat = els.previewFormatSelect.value;
   schedulePreviewConversion();
   schedulePreviewSuggestion();
 }
@@ -884,7 +925,7 @@ async function runPreviewConversion(requestId) {
   els.previewConvertedCropImage.src = result.url;
   setPreviewLink(els.previewConvertedLink, result.url);
   setPreviewLink(els.previewConvertedCropLink, result.url);
-  els.previewConvertedMeta.textContent = `${result.conversion.format} · Q${result.conversion.quality} · ${formatSizePair(result.sourceBytes, result.outputBytes)}`;
+  els.previewConvertedMeta.textContent = `${result.conversion.format}${result.conversion.hdr ? ' HDR · 10-bit 4:4:4' : ''} · Q${result.conversion.quality}${result.conversion.crf != null ? ` · CRF ${result.conversion.crf}` : ''} · ${formatSizePair(result.sourceBytes, result.outputBytes)}`;
   els.previewStatus.textContent = 'Preview only. Apply Quality to use this value in the table.';
 }
 
@@ -947,7 +988,7 @@ async function runPreviewSuggestion(requestId) {
 }
 
 function qualitySuggestionSupported(format) {
-  return format === 'webp' || format === 'jpg';
+  return ['webp', 'jpg', 'avif'].includes(format);
 }
 
 function hideSuggestedQuality(title = '') {
@@ -978,6 +1019,7 @@ function applyPreviewQuality() {
   if (!folder) return;
   const quality = clampQuality(els.previewQualityInput.value, qualityValue(folder));
   setQualityForFolderGroup(folder, quality);
+  if (!$('#previewDuplicateField').hidden) folder.duplicateMode = normalizeDuplicateMode($('#previewDuplicateModeSelect').value);
   renderFolders();
   setStatusText(`Quality ${quality} applied to matching note rows`);
   hidePreviewModal();
@@ -1066,10 +1108,12 @@ function collectPayload() {
       season: folder.mode === 'episode' ? parseSeasonNumber(folder.parsed.season) : null,
       episode: folder.mode === 'episode' ? parseEpisodeNumber(folder.parsed.episode) : null,
       quality: qualityValue(folder),
+      duplicateMode: duplicateModeForFolder(folder),
     }));
 
   return {
     parallelImages: Number($('#parallelImagesSelect').value),
+    duplicateMode: normalizeDuplicateMode(state.settings.duplicateMode),
     conversion: {
       format: els.formatSelect.value,
       quality: Number(els.qualityInput.value),

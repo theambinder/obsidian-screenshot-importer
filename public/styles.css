@@ -976,11 +976,21 @@ select:focus-visible {
 }
 
 .preview-settings {
-  display: grid;
-  grid-template-columns: 78px 158px 72px auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: end;
 }
+
+.preview-settings > label:first-child { width: 78px; }
+.preview-settings > label:nth-child(2) { width: 168px; }
+.preview-settings > label:nth-child(3) { width: 72px; }
+.preview-settings > label:nth-child(4) { width: 118px; }
+.encoding-details { color: var(--muted); font-size: 12px; }
+.output-settings-card > .encoding-details { margin-top: 10px; }
+.source-pair-options { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.source-pair-options select { width: 96px; height: 26px; min-height: 26px; padding-block: 2px; font-size: 11px; }
+.preview-file.excluded-file small { color: var(--muted); font-style: italic; }
 
 .preview-settings label {
   display: grid;

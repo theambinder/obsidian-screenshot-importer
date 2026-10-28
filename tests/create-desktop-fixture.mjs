@@ -7,7 +7,8 @@ import { runCommand } from '../src/utils.mjs';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const withDuplicates = process.argv.includes('--duplicates');
 const withNavigation = process.argv.includes('--navigation');
-const fixtureName = withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
+const withHdr = process.argv.includes('--hdr');
+const fixtureName = withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
 const root = path.join(projectRoot, 'build', fixtureName);
 const locations = {
   screenshotsRoot: path.join(root, 'Screenshots'),
@@ -54,6 +55,16 @@ if (withNavigation) {
       generatedFiles: [],
     }, null, 2));
   }
+}
+if (withHdr) {
+  await fs.mkdir(path.join(locations.mediaRoot, 'Games'), { recursive: true });
+  await fs.writeFile(path.join(locations.mediaRoot, 'Games/HDR Game.md'), '# HDR Game\n\nSynthetic fixture.\n');
+  const hdrFolder = path.join(locations.screenshotsRoot, 'HDR Game');
+  await fs.mkdir(hdrFolder, { recursive: true });
+  for (const extension of ['jxr', 'png']) {
+    await fs.copyFile(path.join(projectRoot, `tests/fixtures/hdr-scrgb.${extension}`), path.join(hdrFolder, `capture.${extension}`));
+  }
+  await fs.writeFile(path.join(locations.dataDir, 'settings.json'), JSON.stringify({ qualityDefaults: { Games: 40 } }));
 }
 await fs.writeFile(path.join(root, 'locations.json'), JSON.stringify(locations, null, 2));
 console.log(root);

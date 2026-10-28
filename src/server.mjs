@@ -15,8 +15,10 @@ import { listRuns, rollbackRun, rollbackRunItem } from './rollback.mjs';
 import { scanScreenshotFolders } from './screenshotScanner.mjs';
 import { ImportJob } from './runner.mjs';
 import { RollbackJob } from './rollbackJob.mjs';
-import { convertImage, normalizeConversionSettings } from './converter.mjs';
+import { convertImage, conversionForImage, withConversionSource } from './converter.mjs';
 import { PreviewCache } from './previewCache.mjs';
+import { HdrReferenceCache } from './hdrReference.mjs';
+import { isJxr } from '../public/imageSelection.js';
 import { pathComponent, sourceFolderPath as checkedSourceFolderPath, assertRealInside } from './paths.mjs';
 import { assertInside, commandVersion, formatBytes, IMAGE_EXTENSIONS, naturalCompare, pathExists, readJson, runCommand } from './utils.mjs';
 
@@ -25,6 +27,7 @@ const publicRoot = path.resolve(__dirname, '../public');
 export function createAppServer(config = resolveConfig(), { updater = null } = {}) {
 const jobs = new Map();
 const previews = new PreviewCache();
+const hdrReferences = new HdrReferenceCache(previews);
 let mutationActive = false;
 let activeJobId = null;
 let pendingWrites = 0;
@@ -151,6 +154,7 @@ async function handleApi(req, res, url) {
     const payload = await readBody(req);
     const settings = await loadAppSettings(config);
     if (payload.parallelImages == null) payload.parallelImages = settings.parallelImages;
+    if (payload.duplicateMode == null) payload.duplicateMode = settings.duplicateMode;
     const job = new ImportJob({ ...config, attachmentsTemplate: settings.imageFolderTemplate }, payload);
     job.kind = 'import';
     startJob(job);
@@ -333,6 +337,8 @@ async function handleApi(req, res, url) {
         size: formatBytes(stat.size),
         mtimeMs: stat.mtimeMs,
         url: sourceImageUrl(payload.folder || '', entry.name),
+        thumbnailUrl: `${sourceImageUrl(payload.folder || '', entry.name)}${isJxr(entry.name) ? '&thumbnail=1' : ''}`,
+        hdr: isJxr(entry.name),
       });
     }
     files.sort((a, b) => naturalCompare(a.name, b.name));
@@ -349,7 +355,7 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const conversion = normalizeConversionSettings(payload.conversion || {});
+    const conversion = conversionForImage(inputPath, payload.conversion || {});
     const outputExt = outputExtensionForFormat(conversion.format, payload.file || '');
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iina-preview-'));
     const outputPath = path.join(tempDir, `preview${outputExt}`);
@@ -389,12 +395,12 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const conversion = normalizeConversionSettings(payload.conversion || {});
+    const conversion = conversionForImage(inputPath, payload.conversion || {});
     if (!qualitySuggestionSupported(conversion.format)) {
       sendJson(res, {
         suggestedQuality: null,
         candidates: [],
-        reason: 'Quality suggestion is available for webp and jpg only',
+        reason: 'Quality suggestion is available for webp, jpg, and avif only',
       });
       return;
     }
@@ -426,8 +432,9 @@ async function handleApi(req, res, url) {
     const file = url.searchParams.get('file') || '';
     const imagePath = sourceImagePath(folder, file);
     await assertRealInside(config.screenshotsRoot, imagePath);
-    const data = await fs.readFile(imagePath);
-    res.writeHead(200, { 'content-type': mimeTypeForPath(imagePath), 'cache-control': 'no-store' });
+    const reference = isJxr(imagePath) ? await hdrReferences.get(imagePath, url.searchParams.get('thumbnail') === '1') : null;
+    const data = reference?.data || await fs.readFile(imagePath);
+    res.writeHead(200, { 'content-type': reference?.mimeType || mimeTypeForPath(imagePath), 'cache-control': 'no-store' });
     res.end(data);
     return;
   }
@@ -470,6 +477,7 @@ function mimeTypeForPath(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
   if (ext === '.webp') return 'image/webp';
+  if (ext === '.avif') return 'image/avif';
   if (ext === '.png') return 'image/png';
   if (ext === '.gif') return 'image/gif';
   if (ext === '.tif' || ext === '.tiff') return 'image/tiff';
@@ -478,38 +486,41 @@ function mimeTypeForPath(filePath) {
 }
 
 function qualitySuggestionSupported(format) {
-  return format === 'webp' || format === 'jpg';
+  return ['webp', 'jpg', 'avif'].includes(format);
 }
 
 async function suggestPreviewQuality(inputPath, fileName, conversion, signal) {
   const sourceStat = await fs.stat(inputPath);
-  const qualities = [95, 90, 85, 80, 75, 70, 65, 60, 55, 50];
+  const qualities = conversion.format === 'avif' ? [90, 75, 60, 50, 40, 30, 20] : [95, 90, 85, 80, 75, 70, 65, 60, 55, 50];
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'iina-quality-'));
   try {
-    const candidates = [];
-    for (const quality of qualities) {
-      signal?.throwIfAborted();
-      const candidateConversion = normalizeConversionSettings({ ...conversion, quality });
-      const outputExt = outputExtensionForFormat(candidateConversion.format, fileName);
-      const outputPath = path.join(tempDir, `q${quality}${outputExt}`);
-      await convertImage(inputPath, outputPath, candidateConversion, { signal });
-      const outputStat = await fs.stat(outputPath);
-      candidates.push({
-        quality,
-        outputBytes: outputStat.size,
-        reductionPercent: reductionPercent(sourceStat.size, outputStat.size),
-      });
-    }
+    return await withConversionSource(inputPath, async (decodedSource) => {
+      const candidates = [];
+      for (const quality of qualities) {
+        signal?.throwIfAborted();
+        const candidateConversion = conversionForImage(inputPath, { ...conversion, quality });
+        const outputExt = outputExtensionForFormat(candidateConversion.format, fileName);
+        const outputPath = path.join(tempDir, `q${quality}${outputExt}`);
+        await convertImage(inputPath, outputPath, candidateConversion, { signal, decodedSource });
+        const outputStat = await fs.stat(outputPath);
+        candidates.push({
+          quality,
+          ...(candidateConversion.crf != null ? { crf: candidateConversion.crf } : {}),
+          outputBytes: outputStat.size,
+          reductionPercent: reductionPercent(sourceStat.size, outputStat.size),
+        });
+      }
 
-    const suggested = pickQualityElbow(candidates, sourceStat.size);
-    return {
-      suggestedQuality: suggested.quality,
-      outputBytes: suggested.outputBytes,
-      sourceBytes: sourceStat.size,
-      reductionPercent: suggested.reductionPercent,
-      candidates,
-      reason: suggested.reason,
-    };
+      const suggested = pickQualityElbow(candidates, sourceStat.size);
+      return {
+        suggestedQuality: suggested.quality,
+        outputBytes: suggested.outputBytes,
+        sourceBytes: sourceStat.size,
+        reductionPercent: suggested.reductionPercent,
+        candidates,
+        reason: suggested.reason,
+      };
+    }, { signal });
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

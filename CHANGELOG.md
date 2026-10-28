@@ -4,6 +4,15 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.6.0 - 2026-10-28
+
+- Import floating-point scRGB HDR JXR captures as 10-bit 4:4:4 AVIF with explicit BT.2020/PQ color metadata and an 80-nit scRGB reference white. Keep dimensions and unclipped HDR values; bundle the decoder and AV1/color-conversion libraries for offline use without external installations.
+- Map AVIF Quality 1–100 monotonically to CRF 63–0, with Quality 40 = CRF 16. Show the effective CRF and HDR encoding details in Compression Preview. Add AVIF output for regular SDR images; JXR always uses HDR AVIF regardless of Default Format.
+- Add JXR only, PNG only, and Both choices for same-name JXR/PNG pairs in Settings, individual folders, and Compression Preview. Default to JXR only; retain unpaired images. Avoid output collisions when both counterparts become AVIF.
+- Archive every original, including unconverted counterparts. Trash removes the entire archived set; Rollback restores it. Count only selected conversions in progress while retaining full original byte/file totals in the archive journal.
+- Render JXR originals as 16-bit PQ PNG references with HDR metadata, including lazy thumbnails and full-size image links. Include AVIF in quality suggestions, reusing decoded JXR data across candidates. Bound HDR reference rendering and keep all processing local.
+- Add synthetic HDR, pair-selection, import, rollback, Trash, preview, color-metadata, and highlight-preservation regression coverage. Unsupported, transparent, or ICC-tagged JXR inputs fail without changing source files or notes.
+
 ## 1.5.1 - 2026-10-08
 
 - Package only Obsidian Screenshot Importer.app in the main download ZIP, without a release wrapper folder, loose Markdown files, or nested source archive. Publish matching FFmpeg/WebP sources and build materials as a separate optional Sources asset; retain notices and an exact source-download link inside the app.

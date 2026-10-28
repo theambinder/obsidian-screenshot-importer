@@ -39,6 +39,26 @@ Four-image concurrency was about **2.57x faster**, two-image concurrency about *
 
 Higher concurrency uses more CPU and memory; Auto uses fewer workers on smaller Macs. A single-image preview is not made faster by this batch optimization. WebP Effort is deliberately unchanged: lowering it is a separate speed/compression-size tradeoff, not the mechanism behind these results.
 
+## HDR AVIF: 1.6.0
+
+AVIF uses the bundled libaom encoder at CPU-used 6, with two codec threads per image.
+Folders containing JXR are capped at two concurrent images, or one when selected by
+the worker/low-memory setting. Floating-point source decoding and color conversion
+use additional memory, and AVIF encoding can be slower than WebP; the global WebP
+Effort setting does not control AV1. No resize is applied to imported outputs.
+
+HDR quality suggestions decode JXR once and reuse that temporary planar-float input
+for all candidate CRFs. Reference image requests are serialized and cached, with
+small lazy thumbnails in the file list. Cached references are bounded together with
+converted previews and remain outside the vault/history. Scratch files are removed
+on completion, failure, or preview cancellation. A hard process/OS crash may leave
+temporary files for normal macOS temporary-directory cleanup.
+
+Quality 40 maps to CRF 16. Higher Quality means lower CRF; this mapping is not a
+perceptual equivalence to WebP/JPEG quality or a promised compression ratio. Size
+and brightness comparisons must use a color-managed HDR viewer/display. All
+source counterparts remain in the archive regardless of selection.
+
 ## Safety and Reproduction
 
 Only image encoding is parallel. A bounded batch is fully drained before ordered publication; failures and early exits clean scratch files. `increment`, `reuse`, `skip`, and `overwrite` resolve their names at serial commit time, including duplicate basenames such as `a.jpg` and `a.png`. Original/copy mode avoids staging overhead. Completed mutations retain the existing checkpoints, backups, hashes, sorted episode insertion, and rollback behavior.

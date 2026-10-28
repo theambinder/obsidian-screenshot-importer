@@ -173,7 +173,7 @@ test('portable bundle converts all formats and finishes an import before shutdow
   assert.equal(savedSettings.autoParallelImages, appSettings.autoParallelImages);
   assert.match(health.tools.cwebp, /1\.6\.0/);
   assert.match(health.tools.ffmpeg, /7\.1\.5/);
-  for (const format of ['webp', 'jpg', 'png', 'original']) {
+  for (const format of ['webp', 'jpg', 'png', 'avif', 'original']) {
     const response = await fetch(`${url}/api/preview-conversion`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ folder: 'Show.S01E01', file: 'shot.png', conversion: { format, quality: 80, effort: 3 } }),
@@ -185,6 +185,17 @@ test('portable bundle converts all formats and finishes an import before shutdow
     assert.equal(image.status, 200);
     assert.equal((await image.arrayBuffer()).byteLength, preview.outputBytes);
   }
+  await fs.copyFile(path.join(projectRoot, 'tests/fixtures/hdr-scrgb.jxr'), path.join(folder, 'hdr.jxr'));
+  await fs.copyFile(path.join(projectRoot, 'tests/fixtures/hdr-scrgb.png'), path.join(folder, 'hdr.png'));
+  const hdrPreviewResponse = await fetch(`${url}/api/preview-conversion`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ folder: 'Show.S01E01', file: 'hdr.jxr', conversion: { format: 'webp', quality: 40 } }),
+  });
+  const hdrPreview = await hdrPreviewResponse.json();
+  assert.equal(hdrPreviewResponse.status, 200, JSON.stringify(hdrPreview));
+  assert.equal(hdrPreview.conversion.crf, 16);
+  assert.equal(hdrPreview.conversion.hdr, true);
+  assert.equal(hdrPreview.mimeType, 'image/avif');
   const source = await fs.readFile(path.join(folder, 'shot.png'));
   for (let n = 1; n <= 6; n += 1) await fs.writeFile(path.join(folder, `shot${n}.png`), source);
   const run = await fetch(`${url}/api/run`, {
@@ -198,7 +209,9 @@ test('portable bundle converts all formats and finishes an import before shutdow
   assert.equal((await desktop.exited)[0], 0);
   const log = JSON.parse(await fs.readFile(path.join(f.locations.dataDir, 'runs', `${jobId}.json`)));
   assert.equal(log.status, 'done');
-  assert.equal(log.generatedFiles.length, 7);
+  assert.equal(log.generatedFiles.length, 8);
+  assert.equal(log.items[0].sourceFileCount, 9);
+  assert.equal(log.items[0].skippedDuplicateCount, 1);
   const noteImported = await fs.stat(notePath, { bigint: true });
   assert.equal(noteImported.birthtimeNs, noteBefore.birthtimeNs);
   assert.ok(noteImported.mtimeNs > noteBefore.mtimeNs);
@@ -209,7 +222,7 @@ test('portable bundle converts all formats and finishes an import before shutdow
   const noteRolledBack = await fs.stat(notePath, { bigint: true });
   assert.equal(noteRolledBack.birthtimeNs, noteBefore.birthtimeNs);
   assert.ok(noteRolledBack.mtimeNs > noteImported.mtimeNs);
-  assert.equal((await fs.readdir(folder)).length, 7);
+  assert.equal((await fs.readdir(folder)).length, 9);
   assert.match(await fs.readFile(path.join(f.locations.mediaRoot, 'Series/Show.md'), 'utf8'), /Personal notes/);
   restarted.child.stdin.end();
   assert.equal((await restarted.exited)[0], 0);

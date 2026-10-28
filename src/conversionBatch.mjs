@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { convertImage } from './converter.mjs';
-import { outputExtensionForFormat } from './matcher.mjs';
+import { outputImageName, isJxr } from '../public/imageSelection.js';
 import { pathExists } from './utils.mjs';
 
 export function normalizeParallelImages(value) {
@@ -19,7 +19,7 @@ export function resolveParallelImages(value, cpuCount = os.availableParallelism(
 
 // Only encoding runs concurrently. The caller publishes files and journals in order.
 export async function* prepareImages(sourceDir, images, outputDir, settings, workers) {
-  const width = settings.format === 'original' ? 1 : Math.min(workers, images.length);
+  const width = settings.format === 'original' ? 1 : Math.min(workers, images.length, images.some(isJxr) ? 2 : 4);
   if (width <= 1) {
     for (const image of images) {
       yield { image, inputStat: await fs.stat(path.join(sourceDir, image)), stagedPath: null };
@@ -34,8 +34,9 @@ export async function* prepareImages(sourceDir, images, outputDir, settings, wor
       const prepared = await Promise.allSettled(batch.map(async (image, index) => {
         const inputPath = path.join(sourceDir, image);
         const inputStat = await fs.stat(inputPath);
-        const extension = outputExtensionForFormat(settings.format, image);
-        const requested = path.join(outputDir, `${path.basename(image, path.extname(image))}${extension}`);
+        const outputName = outputImageName(image, settings.format, images);
+        const extension = path.extname(outputName);
+        const requested = path.join(outputDir, outputName);
         if (['skip', 'reuse'].includes(settings.conflictPolicy) && await pathExists(requested)) {
           return { image, inputStat, stagedPath: null };
         }

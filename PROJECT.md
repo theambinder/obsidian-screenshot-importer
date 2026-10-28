@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.5.1**. The authoritative version is `package.json`.
+Current version: **1.6.0**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -71,11 +71,39 @@ inherit the confidence of a previous automatic candidate.
 
 ## Conversion and Preview
 
-Supported output formats are WebP, JPEG, PNG, and original. WebP uses cwebp; JPEG
-and PNG use the bundled minimal FFmpeg. Original copies without encoding.
+Supported output formats are WebP, JPEG, PNG, AVIF, and original. WebP uses cwebp;
+JPEG, PNG, and AVIF use the bundled minimal FFmpeg. Original copies SDR inputs
+without encoding. JXR always resolves to HDR AVIF, including in Original mode.
 WebP Quality is 1-100. WebP Effort is 0-6 (`cwebp -m`): encoding effort, not visual
 quality. Higher effort can reduce size at the cost of processing time. No resizing
 is performed. Conversion preserves the base filename and changes its extension.
+
+Floating-point linear scRGB JXR uses the bundled `jxr-decode` helper, based on
+Microsoft jxrlib. Half/float RGB and opaque RGBA captures are accepted; integer,
+transparent, nonfinite, and ICC-tagged inputs are rejected without changing originals.
+The decoder emits planar gbrpf32le without clipping values above 1.0. zimg converts
+BT.709 linear scRGB (1.0 = 80 cd/m²) to full-range BT.2020/PQ. libaom encodes
+10-bit 4:4:4 AV1 still images at CPU-used 6, with matching AV1 and AVIF nclx tags
+(9/16/9, full range). No exposure boost or SDR tone mapping is applied. AVIF input
+is not currently indexed as a source format. Regular SDR AVIF output uses sRGB
+transfer and BT.709 primaries/matrix with full-range 10-bit 4:4:4 encoding.
+
+AVIF Quality maps to CRF with rounded piecewise-linear interpolation:
+Q1→63, Q40→16, Q100→0. For Q >= 40, CRF = round((100-Q)*16/60);
+below 40, CRF = round(16+(40-Q)*47/39). CRF 0 uses libaom lossless mode relative
+to the intermediate 10-bit YUV frame, not the original floating-point RGB data.
+Preview shows the effective CRF; category/per-note quality values are not reset.
+
+Same-basename JXR/PNG pairs are detected case-insensitively after NFC normalization,
+within one source folder. The persisted `duplicateMode` default is `jxr`; `png`
+and `both` are also supported. Per-folder overrides and preview overrides apply
+only to actual pairs; unpaired images remain included. Both-mode AVIF output names
+the PNG counterpart `<stem>.sdr.avif` and JXR `<stem>.avif`, including under skip,
+reuse, and overwrite. All source images, including omitted counterparts, are
+snapshotted and checked for changes before note publication and whole-folder archive.
+`sourceBytes`/`sourceFileCount` describe all archived originals. New journal fields
+`processedFileCount`, `skippedDuplicateCount`, and `duplicateMode` describe selection;
+progress counts only selected conversions. Legacy journals remain compatible.
 
 Quality Defaults in Settings stores a fallback and category values. Anime starts
 at 50; the other categories start at 90. Per-note overrides take precedence and
@@ -87,6 +115,14 @@ Clicking an image opens a separate native image window. Apply Quality propagates
 the chosen quality to the note group and closes the dialog. Suggested quality is
 the knee of a tested file-size curve, not a perceptual-quality guarantee; visual
 inspection remains necessary. Preview files are temporary and never enter history.
+
+JXR reference images are 16-bit RGB PQ PNG with BT.2020 cICP metadata, generated
+locally at original resolution; lazy thumbnails are 256 pixels wide. Reference
+renders are serialized, deduplicated by path/size/mtime/thumbnail, and share the
+bounded preview cache. AVIF suggestions reuse one floating-point decode across
+candidates. HDR folder batches use at most two encoders to bound memory. Actual
+HDR display depends on WebKit, OS, viewer, and display capability; a reference is
+not a guarantee of HDR presentation on every supported Mac.
 
 Parallel Images supports Auto/1/2/3/4. Bounded workers encode scratch files while
 note edits, output publication, conflict resolution, and journaling remain serial.
@@ -234,7 +270,7 @@ copies require a manual move to a local Applications folder.
 
 ## Build and Verification
 
-The repeatable Apple Silicon build pins Node.js, WebP, and minimal LGPL FFmpeg,
+The repeatable Apple Silicon build pins Node.js, WebP, AOM, zimg, jxrlib, and minimal LGPL FFmpeg,
 compiles native helpers, checks dynamic dependencies, signs outside synchronized
 storage, and creates an app-only versioned ZIP. Matching codec sources and English
 project sources are published as a separate Sources ZIP on the same release;

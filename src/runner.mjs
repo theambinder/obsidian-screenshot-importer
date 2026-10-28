@@ -6,7 +6,8 @@ import { convertImage, normalizeConversionSettings, publishStagedImage } from '.
 import { prepareImages, resolveParallelImages } from './conversionBatch.mjs';
 import { APP_VERSION } from './version.mjs';
 import { parseSeasonNumber, parseEpisodeNumber } from '../public/episodeSelection.js';
-import { outputExtensionForFormat, parseSourceName, targetHeadingForSelection } from './matcher.mjs';
+import { parseSourceName, targetHeadingForSelection } from './matcher.mjs';
+import { selectImageNames, normalizeDuplicateMode, outputImageName } from '../public/imageSelection.js';
 import { insertScreenshotLinks } from './markdown.mjs';
 import { rememberRule } from './rules.mjs';
 import {
@@ -115,7 +116,7 @@ export class ImportJob {
     for (const selection of selections) {
       const folderPath = this.sourceFolderPath(selection.sourceFolderName);
       const files = await listImageFiles(folderPath);
-      count += files.length;
+      count += selectImageNames(files, selection.duplicateMode ?? this.payload.duplicateMode).length;
     }
     return count;
   }
@@ -142,6 +143,9 @@ export class ImportJob {
       sourceBytes: 0,
       outputBytes: 0,
       sourceFileCount: 0,
+      processedFileCount: 0,
+      skippedDuplicateCount: 0,
+      duplicateMode: normalizeDuplicateMode(selection.duplicateMode ?? this.payload.duplicateMode),
       outputFileCount: 0,
       generatedFiles: [],
       outputHashes: {},
@@ -165,6 +169,17 @@ export class ImportJob {
       }
 
       const sourceImages = await listImageFiles(sourceFolderPath);
+      const selectedImages = selectImageNames(sourceImages, itemLog.duplicateMode);
+      const sourceVersions = new Map();
+      for (const image of sourceImages) {
+        const inputPath = path.join(sourceFolderPath, image);
+        const stat = await fs.stat(inputPath);
+        sourceVersions.set(inputPath, { path: inputPath, size: stat.size, mtimeMs: stat.mtimeMs });
+        itemLog.sourceBytes += stat.size;
+      }
+      itemLog.sourceFileCount = sourceImages.length;
+      itemLog.processedFileCount = selectedImages.length;
+      itemLog.skippedDuplicateCount = sourceImages.length - selectedImages.length;
       const conversion = conversionForSelection(this.payload.conversion || {}, selection);
       itemLog.conversion = conversion;
       const noteName = path.basename(notePath, '.md');
@@ -177,16 +192,13 @@ export class ImportJob {
       await ensureDir(attachmentAbsDir);
 
       const links = [];
-      const sourceVersions = [];
       this.current = `Converting ${selection.sourceFolderName}`;
-      for await (const { image, inputStat, stagedPath } of prepareImages(sourceFolderPath, sourceImages, attachmentAbsDir, conversion, this.workers)) {
+      for await (const { image, inputStat, stagedPath } of prepareImages(sourceFolderPath, selectedImages, attachmentAbsDir, conversion, this.workers)) {
         this.current = `${selection.sourceFolderName} / ${image}`;
         const inputPath = path.join(sourceFolderPath, image);
-        sourceVersions.push({ path: inputPath, size: inputStat.size, mtimeMs: inputStat.mtimeMs });
-        itemLog.sourceBytes += inputStat.size;
-        itemLog.sourceFileCount += 1;
-        const outputExt = outputExtensionForFormat(conversion.format, image);
-        const outputName = `${path.basename(image, path.extname(image))}${outputExt}`;
+        const snapshot = sourceVersions.get(inputPath);
+        if (inputStat.size !== snapshot.size || inputStat.mtimeMs !== snapshot.mtimeMs) throw new Error('Source image changed during import');
+        const outputName = outputImageName(image, conversion.format, selectedImages);
         const requestedOutputPath = path.join(attachmentAbsDir, outputName);
         const outputPath = await uniquePath(requestedOutputPath, conversion.conflictPolicy);
 
@@ -236,7 +248,7 @@ export class ImportJob {
       if (JSON.stringify(await listImageFiles(sourceFolderPath)) !== JSON.stringify(sourceImages)) {
         throw new Error('Source folder changed during import; originals were kept for a retry');
       }
-      for (const source of sourceVersions) {
+      for (const source of sourceVersions.values()) {
         const current = await fs.stat(source.path);
         if (current.size !== source.size || current.mtimeMs !== source.mtimeMs) throw new Error('Source image changed during import');
       }
@@ -278,6 +290,8 @@ export class ImportJob {
         sourceBytes: itemLog.sourceBytes,
         outputBytes: itemLog.outputBytes,
         sourceFileCount: itemLog.sourceFileCount,
+        processedFileCount: itemLog.processedFileCount,
+        skippedDuplicateCount: itemLog.skippedDuplicateCount,
         outputFileCount: itemLog.outputFileCount,
         archivedTo,
         status: 'done',
@@ -330,6 +344,7 @@ export class ImportJob {
 }
 
 function validateSelection(selection) {
+  if (selection.duplicateMode != null && !['jxr', 'png', 'both'].includes(selection.duplicateMode)) throw new Error('Invalid JXR / PNG pair selection');
   if (!selection.sourceFolderName) throw new Error('Missing source folder');
   if (!selection.notePath) throw new Error(`Missing note for ${selection.sourceFolderName}`);
   if (!['episode', 'screenshots'].includes(selection.mode)) throw new Error('Invalid mode');

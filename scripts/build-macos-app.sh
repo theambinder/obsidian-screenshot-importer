@@ -34,7 +34,8 @@ for archive in node-v24.21.0-darwin-arm64.tar.xz libwebp-1.6.0-mac-arm64.tar.gz 
 done
 VERSION="$(build/vendor/node-v24.21.0-darwin-arm64/bin/node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { printf 'Expected a numeric MAJOR.MINOR.PATCH version\n' >&2; exit 1; }
-if [[ ! -x build/vendor/ffmpeg-7.1.5/ffmpeg ]] || [[ scripts/build-ffmpeg.sh -nt build/vendor/ffmpeg-7.1.5/ffmpeg ]]; then
+/bin/bash scripts/build-hdr-codecs.sh
+if [[ ! -x build/vendor/ffmpeg-7.1.5/ffmpeg ]] || [[ scripts/build-ffmpeg.sh -nt build/vendor/ffmpeg-7.1.5/ffmpeg ]] || [[ build/hdr-codecs/lib/libaom.a -nt build/vendor/ffmpeg-7.1.5/ffmpeg ]] || [[ build/hdr-codecs/lib/libzimg.a -nt build/vendor/ffmpeg-7.1.5/ffmpeg ]]; then
   /bin/bash scripts/build-ffmpeg.sh
 fi
 
@@ -46,6 +47,7 @@ SOURCES="$STAGING/Sources"
 mkdir -p "$APP/Contents/MacOS" "$RES/bin" "$RES/app" "$RES/Licenses" "$SOURCES"
 /bin/bash scripts/build-native-helpers.sh
 cp build/bin/preserve-creation-time "$RES/bin/preserve-creation-time"
+cp build/bin/jxr-decode "$RES/bin/jxr-decode"
 cp macos/DesktopInfo.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
@@ -70,10 +72,15 @@ cp build/vendor/node-v24.21.0-darwin-arm64/LICENSE "$RES/Licenses/Node.txt"
 cp build/vendor/ffmpeg-7.1.5/COPYING.LGPLv2.1 "$RES/Licenses/FFmpeg.txt"
 cp build/vendor/libwebp-1.6.0/COPYING "$RES/Licenses/WebP.txt"
 cp build/vendor/libwebp-1.6.0/PATENTS "$RES/Licenses/WebP-PATENTS.txt"
-printf 'Corresponding FFmpeg/WebP sources and build materials for version %s:\nhttps://github.com/theambinder/obsidian-screenshot-importer/releases/download/v%s/Obsidian-Screenshot-Importer-%s-Sources.zip\n\nFFmpeg is distributed under LGPLv2.1. The Sources archive is not required to run the application. Redistribution must retain corresponding source access and third-party notices.\n' \
+cp build/vendor/aom-3.12.1/LICENSE "$RES/Licenses/AOM.txt"
+cp build/vendor/aom-3.12.1/PATENTS "$RES/Licenses/AOM-PATENTS.txt"
+cp build/vendor/zimg-release-3.0.6/COPYING "$RES/Licenses/zimg.txt"
+cp build/vendor/jxrlib-f7521879862b9085318e814c6157490dd9dbbdb4/LICENSE "$RES/Licenses/jxrlib.txt"
+printf 'Corresponding FFmpeg/WebP/AOM/zimg/jxrlib sources and build materials for version %s:\nhttps://github.com/theambinder/obsidian-screenshot-importer/releases/download/v%s/Obsidian-Screenshot-Importer-%s-Sources.zip\n\nFFmpeg is distributed under LGPLv2.1. The Sources archive is not required to run the application. Redistribution must retain corresponding source access and third-party notices.\n' \
   "$VERSION" "$VERSION" "$VERSION" > "$RES/Licenses/Source-Access.txt"
 cp build/downloads/libwebp-1.6.0.tar.gz "$SOURCES/"
 cp build/downloads/ffmpeg-7.1.5.tar.xz "$SOURCES/"
+cp build/downloads/aom-v3.12.1.tar.gz build/downloads/zimg-release-3.0.6.tar.gz build/downloads/jxrlib-f7521879862b9085318e814c6157490dd9dbbdb4.tar.gz "$SOURCES/"
 # config.log contains the developer's full environment; distribute flags only.
 "$RES/bin/ffmpeg" -hide_banner -buildconf > "$SOURCES/ffmpeg-build-config.txt" 2>&1
 cp -R src public scripts tests "$SOURCES/"

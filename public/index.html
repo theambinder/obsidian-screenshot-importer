@@ -135,11 +135,12 @@
             <h2>Output</h2>
             <div class="settings-fields">
               <label>
-                Format
+                Default Format
                 <select id="formatSelect">
                   <option value="webp" selected>webp</option>
                   <option value="jpg">jpg</option>
                   <option value="png">png</option>
+                  <option value="avif">avif</option>
                   <option value="original">original</option>
                 </select>
               </label>
@@ -176,7 +177,16 @@
                   <option value="4">4</option>
                 </select>
               </label>
+              <label>
+                JXR / PNG Pairs
+                <select id="duplicateModeSelect">
+                  <option value="jxr">JXR only</option>
+                  <option value="png">PNG only</option>
+                  <option value="both">Both</option>
+                </select>
+              </label>
             </div>
+            <div class="encoding-details">JXR: HDR AVIF · 10-bit · 4:4:4</div>
           </section>
 
           <section class="settings-card quality-settings-card">
@@ -239,11 +249,12 @@
               <option value="webp">webp</option>
               <option value="jpg">jpg</option>
               <option value="png">png</option>
+              <option value="avif">avif</option>
               <option value="original">original</option>
             </select>
           </label>
           <label>
-            Quality
+            <span>Quality <span id="previewCrf" class="encoding-details"></span></span>
             <span class="quality-suggest-row">
               <input id="previewQualityInput" type="number" min="1" max="100" value="90">
               <button id="previewSuggestedQualityButton" type="button" hidden>Auto</button>
@@ -259,6 +270,14 @@
               <option value="4">4</option>
               <option value="5">5</option>
               <option value="6">6</option>
+            </select>
+          </label>
+          <label id="previewDuplicateField" hidden>
+            JXR / PNG Pairs
+            <select id="previewDuplicateModeSelect">
+              <option value="jxr">JXR only</option>
+              <option value="png">PNG only</option>
+              <option value="both">Both</option>
             </select>
           </label>
           <button id="applyPreviewQualityButton" class="primary" type="button">Apply Quality</button>

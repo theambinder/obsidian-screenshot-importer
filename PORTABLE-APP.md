@@ -2,12 +2,12 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.5.1-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.5.1-Sources.zip` is a separate optional release asset, not required to run or update the app.
+1. Download `Obsidian-Screenshot-Importer-1.6.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.6.0-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
-Requirements: **Apple Silicon (M1 or later), macOS 13.5 or later**. This is not an Intel/universal build. The complete app includes Node.js, cwebp, and FFmpeg. Image processing works offline with files already downloaded from iCloud; optional manual update checks require internet access.
+Requirements: **Apple Silicon (M1 or later), macOS 13.5 or later**. This is not an Intel/universal build. The complete app includes Node.js, cwebp, FFmpeg with static AOM/zimg, and the HDR JXR decoder. Image processing works offline with files already downloaded from iCloud; optional manual update checks require internet access.
 
 The build is ad-hoc signed, **not Apple Developer ID signed or notarized**. On another Mac, Gatekeeper may require approval in System Settings > Privacy & Security > Open Anyway ([Apple's instructions](https://support.apple.com/en-gb/102445)). Only trusted release copies should be approved. No disabling Gatekeeper or system-wide security changes are needed. Managed Macs may disallow unnotarized apps.
 
@@ -50,7 +50,8 @@ The backend listens only on `127.0.0.1` on an automatically assigned free port. 
 
 ## Build and Maintenance
 
-Developer build on an Apple Silicon Mac with Apple's Command Line Tools:
+Developer build on an Apple Silicon Mac with Apple's Command Line Tools, CMake,
+pkg-config, autoconf, automake, and GNU libtool available on PATH:
 
 ```sh
 /bin/bash scripts/build-macos-app.sh
@@ -62,9 +63,12 @@ Official upstream dependencies:
 
 - [Node.js 24.21.0](https://nodejs.org/dist/v24.21.0/), official macOS arm64 binary; hash checked against upstream SHASUMS256.txt. Its Mach-O minimum system version is 13.5.
 - [WebP 1.6.0](https://developers.google.com/speed/webp/download), official standalone macOS arm64 cwebp.
-- [FFmpeg 7.1.5](https://ffmpeg.org/releases/), minimal LGPL static build, no network codecs or Homebrew libraries. PNG/JPEG output, PNG/JPEG/TIFF/BMP/WebP/GIF input, file protocol only; screenshot processing, not a general-purpose FFmpeg distribution.
+- [FFmpeg 7.1.5](https://ffmpeg.org/releases/), minimal LGPL static build, no network codecs or Homebrew libraries. PNG/JPEG/AVIF output, PNG/JPEG/TIFF/BMP/WebP/GIF input, raw planar-float processing, file protocol only; screenshot processing, not a general-purpose FFmpeg distribution.
+- [AOM 3.12.1](https://aomedia.googlesource.com/aom/+/refs/tags/v3.12.1), static AV1 encoder/decoder, including 10-bit 4:4:4 still images. BSD license and patent notice retained.
+- [zimg 3.0.6](https://github.com/sekrit-twc/zimg/tree/release-3.0.6), static color conversion for linear scRGB to BT.2020/PQ with an 80-nit reference white. WTFPL license retained.
+- [Microsoft jxrlib](https://github.com/4creators/jxrlib/tree/f7521879862b9085318e814c6157490dd9dbbdb4), pinned BSD-2-Clause codec linked into the small `jxr-decode` helper. Only opaque floating-point scRGB captures are supported; no Python runtime is required.
 
-WebP/FFmpeg archive hashes were pinned from the initial HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`, with the exact corresponding-source download link in `Source-Access.txt`. Matching FFmpeg/WebP source archives, native/frontend/backend sources, and build configuration are published as `Obsidian-Screenshot-Importer-VERSION-Sources.zip`, a separate asset on the same GitHub release. From 1.5.1 the main ZIP contains only the application, and updates do not download source materials. Redistribution must retain third-party notices and corresponding source access; see [FFmpeg's distribution guidance](https://ffmpeg.org/legal.html). Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. Network connections are limited to explicitly requested GitHub update checks and downloads.
+Codec archive hashes were pinned from HTTPS downloads; unlike Node's hash, they were not independently signature-verified. License texts remain in `Contents/Resources/Licenses`, with the exact corresponding-source download link in `Source-Access.txt`. Matching FFmpeg/WebP/AOM/zimg/jxrlib source archives, native/frontend/backend sources, and build configuration are published as `Obsidian-Screenshot-Importer-VERSION-Sources.zip`, a separate asset on the same GitHub release. From 1.5.1 the main ZIP contains only the application, and updates do not download source materials. Redistribution must retain third-party notices and corresponding source access; see [FFmpeg's distribution guidance](https://ffmpeg.org/legal.html). Upgrading a codec requires updating the URL/hash, rebuilding, and re-running image tests. Network connections are limited to explicitly requested GitHub update checks and downloads.
 
 From 1.1.0, the build strips only debug/local symbol tables from Node before signing; it does not remove ICU, runtime code, or image codecs. This reduces installed size without requiring dependencies on the destination Mac. Symbols are still available in the pinned upstream Node archive for low-level debugging.
 
@@ -90,6 +94,7 @@ Implementation:
 - `macos/UpdateInstaller.swift`: signed, nonprivileged update validation, staged replacement, recovery and restart helper.
 - `src/updates.mjs`, `public/updates.js`: fixed-repository releases, bounded verified downloads, update dialog and progress.
 - `macos/preserve-creation-time.c`: filesystem-only helper using `fsetattrlist(ATTR_CMN_CRTIME)`, bundled and signed alongside the converters. Never changes the source, follows symlinks, or restores an old modification time.
+- `macos/jxr-decode.c`, `scripts/build-hdr-codecs.sh`: native floating-point HDR decoder and pinned static codec builds. `src/converter.mjs` owns PQ transformation/AVIF output; `public/imageSelection.js` shares pair policy and Quality-to-CRF mapping across frontend/backend.
 - `src/desktop.mjs`: private stdin/stdout JSON protocol, random-port backend, local data lock, parent-pipe monitoring, shutdown after writes finish.
 - `src/desktopConfig.mjs`: local profile and migration-free discovery of the existing data folder.
 - `src/server.mjs`: imported loopback server factory; rejects new writes after a desktop shutdown/update begins and exposes a non-HTTP busy check to its host.
@@ -97,7 +102,17 @@ Implementation:
 
 Production launch is exclusively through the built native application. Legacy shell-launcher templates, dependency installation scripts, and the standalone server entrypoint are removed. Source changes require a rebuild because each app contains an immutable code snapshot. Existing support-directory names and journal identifiers are compatibility data, not alternative launch methods.
 
-## Verification (2026-09-18)
+## Verification (2026-10-28)
+
+Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
+10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,
+conflicting names, source preservation, rollback, and Trash of omitted counterparts.
+The packaged backend exercises JXR/AVIF without Homebrew on PATH. Native WKWebView
+checks confirm thumbnails, CRF display, pair selection, modal closure on Apply
+Quality, and converted AVIF opening in a separate Image Preview window.
+Real screenshots, Media notes, and history are not used as mutation targets.
+
+## Earlier Verification
 
 Release 1.4.0 verification (2026-10-08): all 83 tests pass, including the packaged-backend test. The transfer ZIP was extracted outside iCloud and passed strict deep signature verification. A disposable native profile confirmed grouped mode changes, S2E0 and Season 3 episode detection, the editable output folder, Size sorting, and the compact window layout. A 1,001-image import and full rollback completed with results and disabled mutation buttons. No real screenshots/Media notes/history were used. The test app and owned backend exited cleanly. No second physical Mac was available.
 

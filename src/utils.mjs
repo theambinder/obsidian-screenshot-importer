@@ -5,7 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.bmp']);
+export const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.bmp', '.jxr']);
 export const VIDEO_EXTENSIONS = new Set(['.mkv', '.mp4', '.mov', '.avi', '.m4v', '.webm']);
 
 export function toPosixPath(value) {

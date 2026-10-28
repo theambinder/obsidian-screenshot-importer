@@ -210,6 +210,7 @@ export function targetHeadingForSelection(selection) {
 }
 
 export function outputExtensionForFormat(format, inputName) {
+  if (/\.jxr$/i.test(inputName) || format === 'avif') return '.avif';
   if (format === 'original') return path.extname(inputName).toLowerCase();
   if (format === 'jpg') return '.jpg';
   if (format === 'png') return '.png';
