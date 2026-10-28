@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.7.1**. The authoritative version is `package.json`.
+Current version: **1.7.2**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -57,9 +57,16 @@ Movie years and resolution/codec numbers are not treated as episode numbers.
 Season must be an integer >= 1; Episode must be an integer >= 0. Empty, fractional,
 negative, unsafe, or nonnumeric values are invalid. E0 and padded E00 are valid.
 
-Work is the conservative default when no episode pattern is detected. A Series or
-Anime category alone does not identify an episode. A mode tooltip explains whether
-the mode was detected or saved manually. Changing Work/Episode updates all rows
+Mode priority is saved manual Note mode, frontmatter type/classification tags,
+category, then filename detection. Series notes default to Episode even when the
+number is unknown; Movies/Games/Manga/Comics default to Work. Unclassified Anime
+and Cartoons retain conservative filename-based detection. The index exposes only
+the mode hint/reason, not the full frontmatter. Supported type fields are `type`,
+`media_type`, and `mediaType`; series/tv-series/tv-show/show and movie/film/game/
+manga/comic values, including classification tags, are recognized. The same mode
+logic runs on scan and on manual note selection. Bare episodes before bracketed
+technical labels are detected, such as `Example Show 23 [BDrip 1280x720]` → S1E23.
+A mode tooltip explains the decision. Changing Work/Episode updates all rows
 with the same exact nonempty Note path, preserves edited numbers, fills missing
 numbers from each filename, defaults only missing seasons to 1, and leaves unknown
 episodes blank. Preferences persist as per-note `noteModes`.
@@ -130,6 +137,9 @@ default (WebP initially); an explicit row override lasts until the next scan and
 does not affect other folders sharing the Note. JXR-only selections display locked
 AVIF, without overwriting the preferred SDR format when switching to PNG or Both.
 Compact pair selectors appear only for actual JXR/PNG pairs in the Format column.
+Since 1.7.2, an explicit copy-icon action applies the displayed Format to every
+folder with the exact same nonempty Note path. A normal selector change remains
+per-folder. The action leaves Quality, Resolution, and paired-source policy alone.
 Suggested quality is
 the knee of a tested file-size curve, not a perceptual-quality guarantee; visual
 inspection remains necessary. Preview files are temporary and never enter history.
@@ -160,6 +170,19 @@ Table estimates sit below original Size. Note suggestions and matching badges us
 Folder names are keyboard-accessible buttons that open the source directory;
 the former separate folder icon is removed. Responsive rows retain every control
 without horizontal overflow, including Format and full dimension captions.
+Selected rows have separate subtle light/dark tints. The header selection totals
+have a stronger violet fill only when at least one folder is selected. Range,
+note-group, manual-match, select-all, and clear actions update both states.
+
+File sizes are shared between frontend/backend through `public/formatBytes.js` and
+use decimal units, matching Finder. Source bytes, numeric sorting, journal data,
+compression ratios, and conversion results are not changed by display formatting.
+
+Run completion reports include an Obsidian button per folder, using the result's
+heading-specific URI (or a note-index fallback for failed items). The report keeps
+its originating Run ID. Open History explicitly expands that Run and scrolls it
+below the sticky headers, without changing ordinary section scroll restoration.
+History disclosure triangles use 23px glyphs inside the existing compact buttons.
 
 Scan order and the displayed Date Modified use directory mtime, matching Finder,
 not the newest contained image. The latter remains `latestMtimeMs` for source

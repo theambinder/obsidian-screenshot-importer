@@ -50,13 +50,15 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
   or Both for same-name pairs; archive and restore all originals, including unconverted counterparts.
 - Set category defaults and per-note quality; convert batches in parallel.
 - Override output Format for individual folders, with compact JXR/PNG pair choices
-  beside the format. Click a folder name to open its source directory.
+  beside the format. The copy icon applies the displayed Format to all folders with
+  the exact same Note. Click a folder name to open its source directory.
 - Insert Obsidian embeds into the correct work or episode section and place images
   in the configurable **Settings > Image Folder** (default `All Notes/Attachments/{notename}/`).
 - Review run summaries, compression savings, and archived sources. Roll back a
   whole run or one folder with live progress, or send checked archives to the macOS Trash.
   A second mutation cannot start while rollback is running; progress survives tab changes and page reloads.
 - Select matching notes in bulk, sort by Folder, Size, Note, Season, or Episode, and use system/light/dark themes.
+  Selected rows receive a subtle tint; the selected folder/image totals use an accent badge.
   Each section remembers its own scroll position during the session.
 - Preserve note creation dates on macOS while updating modification dates.
 
@@ -85,6 +87,9 @@ use one Mac at a time and let synchronization finish before switching.
 
 ## Resolution, Estimates, and Ordering
 
+File sizes use decimal KB/MB/GB (1000 bytes per KB), matching Finder. Byte totals,
+sorting, conversion outputs, and compression ratios are unchanged.
+
 The default order is the source **folder's Date Modified**, newest first, matching
 Finder. It is not the date of the newest screenshot inside the folder. **Reset sort**
 restores this order; Refresh retains an explicitly selected column sort.
@@ -111,6 +116,19 @@ Settings applies quality, effort, and resolution to matching Note rows; format a
 paired-source selection remain per folder. **Settings > Default Format** is persisted
 and inherited by rows without a format override. Estimates describe selected
 outputs, whereas archive totals include all originals, including omitted counterparts.
+
+## Note Types and Run Reports
+
+Work/Episode mode first respects a saved manual choice for the Note. Otherwise,
+frontmatter `type`, `media_type`, `mediaType`, or classification tags such as
+`media/anime/series` identify series or standalone works. The Series category
+defaults to Episode; Movies, Games, Manga, and Comics default to Work. Unclassified
+Anime/Cartoons fall back to filename patterns. Unknown episode numbers remain blank
+for review. A bare number before a technical bracket, such as `Example Show 23
+[BDrip 1280x720]`, is recognized as S1E23; years and dimensions are not episodes.
+
+The completed Run report provides an Obsidian button for each folder, targeting its
+work or episode heading. **Open History** expands and scrolls to that specific Run.
 
 ## HDR Captures and Paired Originals
 

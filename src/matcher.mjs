@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { findRule } from './rules.mjs';
-import { parseEpisodeNumber } from '../public/episodeSelection.js';
+import { noteModeInfo } from '../public/mediaMode.js';
 import { naturalCompare, normalizeText, stripKnownVideoExtension, tokenize } from './utils.mjs';
 
 const SOURCE_NOISE_PATTERNS = [
@@ -86,7 +86,7 @@ export function parseSourceName(folderName) {
     return finalizeParsed(parsed);
   }
 
-  match = compact.match(/(?:^|[\s._-])(\d{1,3})(?=[\s._-]*(?:BDRip|WEBRip|WEB-DL|DVDRip|HDTVRip|$))/i);
+  match = compact.match(/(?:^|[\s._-])(\d{1,3})(?=[\s._-]*(?:\[\s*)?(?:BDRip|WEBRip|WEB-DL|DVDRip|HDTVRip|$))/i);
   if (match && Number(match[1]) <= 200) {
     applyEpisode(1, match[1], 'loose episode number', match.index);
     return finalizeParsed(parsed);
@@ -198,10 +198,7 @@ export function suggestNotes(parsed, notes, rules) {
 }
 
 export function inferMode(note, parsed) {
-  if (parsed.mode === 'episode') return 'episode';
-  if (!note) return parsed.mode;
-  if (['Series', 'Anime', 'Cartoons'].includes(note.mediaDir) && parseEpisodeNumber(parsed.episode) !== null) return 'episode';
-  return 'screenshots';
+  return noteModeInfo(note, parsed).mode;
 }
 
 export function targetHeadingForSelection(selection) {

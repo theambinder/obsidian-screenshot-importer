@@ -1,10 +1,12 @@
-import { nextFolderSort, sortFolders, setNoteFoldersEnabled, setNoteFoldersMode, selectFolderRange } from './folderTable.js';
+import { nextFolderSort, sortFolders, setNoteFoldersEnabled, setNoteFoldersMode, setNoteFoldersFormat, selectFolderRange } from './folderTable.js';
 import { normalizeTheme, resolveTheme } from './theme.js';
 import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicateEpisodes } from './episodeSelection.js';
 import { createTabScroll } from './tabScroll.js';
 import { createUpdates } from './updates.js';
 import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualityToCrf, effectiveFormat } from './imageSelection.js';
 import { FORMATS, RESOLUTIONS, compressionDescription, resolutionLabel, dimensionSummary } from './conversionProfile.js';
+import { formatBytes } from './formatBytes.js';
+import { noteModeInfo } from './mediaMode.js';
 
 const state = {
   config: null,
@@ -36,6 +38,8 @@ const state = {
   archiveCanTrash: false,
   lastCheckboxIndex: null,
   openRunIds: new Set(),
+  doneRunId: null,
+  historyFocusRunId: null,
   preview: {
     folder: null,
     files: [],
@@ -202,8 +206,14 @@ $('#folderSortSelect').addEventListener('change', (event) => {
 });
 $('#resetSortButton').addEventListener('click', () => setFolderSort(null));
 els.openHistoryButton.addEventListener('click', () => {
+  const runId = state.doneRunId;
+  if (runId) {
+    state.openRunIds.add(runId);
+    state.historyFocusRunId = runId;
+  }
   hideDoneModal();
   setTab('history');
+  if (runId && !$('#historyPanel').hidden) focusHistoryRun();
 });
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.note-picker')) hideNoteMenus();
@@ -591,7 +601,7 @@ function renderFolderRows() {
     const hdrOnly = selectedNames.length > 0 && selectedNames.every(isJxr);
     const hasPairs = duplicatePairs((folder.images || []).map((image) => image.name)).length > 0;
     const tr = document.createElement('tr');
-    tr.className = 'folder-row';
+    tr.className = `folder-row${folder.enabled ? ' is-selected' : ''}`;
     tr.dataset.index = String(index);
     tr.innerHTML = `
       <td class="use-cell" title="Double-click to select or clear all folders for this note">
@@ -628,9 +638,12 @@ function renderFolderRows() {
         </div>
       </td>
       <td class="format-cell">
+        <div class="format-control">
         <select class="row-format" aria-label="Format for ${escapeAttr(folder.name)}" title="${hdrOnly ? 'JXR always uses HDR AVIF' : 'Output format for this folder; JXR always uses HDR AVIF'}" ${hdrOnly ? 'disabled' : ''}>
           ${FORMATS.map((value) => `<option value="${value}" ${value === (hdrOnly ? 'avif' : conversion.format) ? 'selected' : ''}>${value}</option>`).join('')}
         </select>
+        <button class="icon-button apply-note-format" type="button" title="Apply Format to all folders with this Note" aria-label="Apply Format to all folders with this Note: ${escapeAttr(folder.name)}" ${folder.selectedNotePath ? '' : 'disabled'}><span class="ui-icon icon-copy" aria-hidden="true"></span></button>
+        </div>
         ${hasPairs ? `<select class="row-duplicate-mode" aria-label="JXR / PNG pairs for ${escapeAttr(folder.name)}" title="Which paired originals to convert; all originals are archived">
           ${[['jxr', 'JXR only'], ['png', 'PNG only'], ['both', 'Both']].map(([value, label]) => `<option value="${value}" ${value === duplicateModeForFolder(folder) ? 'selected' : ''}>${label}</option>`).join('')}
         </select>` : ''}
@@ -695,6 +708,11 @@ function renderFolderRows() {
       folder.formatOverride = event.target.value;
       renderFolders();
     });
+    tr.querySelector('.apply-note-format').addEventListener('click', () => {
+      const count = setNoteFoldersFormat(state.folders, folder, tr.querySelector('.row-format').value);
+      renderFolders();
+      setStatusText(`Format applied to ${formatUnit(count, 'folder')}`);
+    });
     tr.querySelector('.row-duplicate-mode')?.addEventListener('change', (event) => {
       folder.duplicateMode = normalizeDuplicateMode(event.target.value);
       renderFolders();
@@ -755,7 +773,9 @@ function renderFolderRows() {
 function updateFolderSelection() {
   // Keep the cell nodes alive between the first and second click of a double-click.
   for (const row of els.foldersBody.querySelectorAll('.folder-row')) {
-    row.querySelector('.enabled-input').checked = state.visibleFolders[Number(row.dataset.index)].enabled;
+    const enabled = state.visibleFolders[Number(row.dataset.index)].enabled;
+    row.querySelector('.enabled-input').checked = enabled;
+    row.classList.toggle('is-selected', enabled);
   }
   renderSelectionSummary();
 }
@@ -764,7 +784,7 @@ function renderSelectionSummary() {
   const selected = state.folders.filter((folder) => folder.enabled).length;
   const files = state.folders.filter((folder) => folder.enabled).reduce((sum, folder) => sum + selectedNamesForFolder(folder).length, 0);
   const summary = state.screenshotsSummary || summarizeVisibleFolders();
-  els.selectionSummary.textContent = `${formatUnit(summary.folderCount, 'folder')} · ${formatUnit(summary.imageCount, 'screenshot')} · ${formatBytes(summary.bytes)} · ${formatCount(selected)} selected · ${formatUnit(files, 'selected screenshot')}`;
+  els.selectionSummary.innerHTML = `<span>${formatUnit(summary.folderCount, 'folder')} · ${formatUnit(summary.imageCount, 'screenshot')} · ${formatBytes(summary.bytes)}</span><span class="selection-count${selected ? ' active' : ''}">${formatCount(selected)} selected · ${formatUnit(files, 'selected screenshot')}</span>`;
 }
 
 function formatFolderMeta(folder) {
@@ -842,6 +862,10 @@ function applyNoteToFolder(folder, note, reason) {
   if (state.settings.noteModes?.[note.path]) {
     setNoteFoldersMode([folder], folder, state.settings.noteModes[note.path]);
     folder.modeReason = 'Saved mode for this note';
+  } else {
+    const info = noteModeInfo(note, folder.parsed);
+    setNoteFoldersMode([folder], folder, info.mode);
+    folder.modeReason = info.reason;
   }
   if (state.qualityByNotePath.has(note.path)) {
     folder.quality = state.qualityByNotePath.get(note.path);
@@ -1419,7 +1443,7 @@ function pollJob(jobId) {
             restoredNotes: job.result.removedMarkdownBlock ? [job.sourceFolderName] : [],
           } : job.result;
           showRollbackModal({ runId: job.runId }, result);
-        } else if (job.kind !== 'rollback') showDoneModal(job.results || []);
+        } else if (job.kind !== 'rollback') showDoneModal(job.results || [], job.runId || job.id || jobId);
         if (job.error) setStatusText(job.error);
       } catch (error) {
         setStatusText(`Operation ${job.status}; refresh failed: ${error.message}`);
@@ -1448,7 +1472,8 @@ function setProgress(job) {
   els.currentText.textContent = job.error || job.current || '';
 }
 
-function showDoneModal(results) {
+function showDoneModal(results, runId) {
+  state.doneRunId = runId || null;
   els.doneTitle.textContent = 'Done';
   const successful = results.filter((result) => result.status === 'done');
   const failed = results.filter((result) => result.status !== 'done');
@@ -1462,20 +1487,28 @@ function showDoneModal(results) {
     </div>
     <div class="modal-items">
       ${results.map((result) => `
-        <div class="modal-item">
-          <div class="result-title">${escapeHtml(result.targetLabel || result.sourceFolderName)}</div>
+        <div class="modal-item run-result-item">
+          <div class="result-copy"><div class="result-title">${escapeHtml(result.targetLabel || result.sourceFolderName)}</div>
           <div class="result-meta">${result.status === 'done'
             ? `${escapeHtml(result.sourceFolderName)} · ${formatUnit(result.insertedCount, 'link')} · ${formatSizePair(result.sourceBytes || 0, result.outputBytes || 0)}`
             : escapeHtml(result.error || 'error')}
           </div>
+          </div>
+          <button class="icon-button open-result-note" type="button" title="Open note in Obsidian" aria-label="Open note in Obsidian: ${escapeAttr(result.targetLabel || result.sourceFolderName)}" data-note-uri="${escapeAttr(result.noteUri || noteForPath(result.notePath)?.obsidianUri || '')}" ${result.noteUri || noteForPath(result.notePath)?.obsidianUri ? '' : 'disabled'}><img class="brand-icon" src="/icons/obsidian.svg" alt=""></button>
         </div>
       `).join('')}
     </div>
   `;
+  els.doneModalBody.querySelectorAll('.open-result-note').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.dataset.noteUri) window.location.href = button.dataset.noteUri;
+    });
+  });
   els.doneModal.hidden = false;
 }
 
 function showRollbackModal(run, result) {
+  state.doneRunId = run.runId;
   const errors = result.errors || [];
   els.doneTitle.textContent = result.status === 'done' ? 'Rollback Done' : 'Rollback Partial';
   els.doneModalBody.innerHTML = `
@@ -1519,6 +1552,20 @@ function hideDoneModal() {
 async function loadRuns() {
   const data = await api('/api/runs');
   tabScroll.refresh('history', () => renderRuns(data));
+  focusHistoryRun();
+}
+
+function focusHistoryRun() {
+  if (!state.historyFocusRunId || $('#historyPanel').hidden) return;
+  const card = [...els.runsList.querySelectorAll('.run-card')].find((element) => element.dataset.runId === state.historyFocusRunId);
+  if (!card) return;
+  card.querySelector('.run-items').hidden = false;
+  const toggle = card.querySelector('.run-toggle');
+  toggle.setAttribute('aria-expanded', 'true');
+  toggle.textContent = '▾';
+  toggle.title = 'Collapse run';
+  card.scrollIntoView({ block: 'start' });
+  state.historyFocusRunId = null;
 }
 
 function renderRuns(data) {
@@ -1540,6 +1587,7 @@ function renderRuns(data) {
   for (const run of runs) {
     const card = document.createElement('div');
     card.className = 'run-card';
+    card.dataset.runId = run.runId;
     card.title = `Run ID: ${run.runId}`;
     const isOpen = state.openRunIds.has(run.runId);
     card.innerHTML = `
@@ -1894,14 +1942,6 @@ function numericInputValue(input) {
   const value = String(input.value || '').replace(/\D+/g, '');
   if (input.value !== value) input.value = value;
   return value;
-}
-
-function formatBytes(bytes) {
-  const value = Number(bytes) || 0;
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
 function formatCount(value) {

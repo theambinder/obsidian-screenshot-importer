@@ -1,4 +1,5 @@
 import { parseSeasonNumber, parseEpisodeNumber } from './episodeSelection.js';
+import { FORMATS } from './conversionProfile.js';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const sortKeys = new Set(['source', 'size', 'note', 'season', 'episode']);
@@ -50,6 +51,17 @@ export function setNoteFoldersMode(folders, source, mode) {
     folder.parsed.episode = parseEpisodeNumber(folder.parsed.episode) ?? parseEpisodeNumber(detected?.episode);
   }
   return group;
+}
+
+export function setNoteFoldersFormat(folders, source, format) {
+  if (!source.selectedNotePath || !FORMATS.includes(format)) return 0;
+  let count = 0;
+  for (const folder of folders) {
+    if (folder.selectedNotePath !== source.selectedNotePath) continue;
+    folder.formatOverride = format;
+    count++;
+  }
+  return count;
 }
 
 export function selectFolderRange(folders, index, anchor, enabled) {

@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.7.1-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.1-Sources.zip` is a separate optional release asset, not required to run or update the app.
+1. Download `Obsidian-Screenshot-Importer-1.7.2-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.2-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -55,6 +55,11 @@ to the previewed folder. Format inherits the saved Settings default, with an
 individual override in each row and a compact paired-source selector in the same
 column. JXR remains HDR AVIF. Click a folder name to open its source directory.
 Note suggestions and match badges use compact 18px pills.
+The Format copy icon applies the displayed choice to every folder sharing its Note.
+Selected rows are tinted in both themes, with accent-filled selection totals.
+Sizes use decimal Finder-compatible units. Note types/tags guide Work/Episode mode;
+saved manual choices still take priority. Completed reports offer per-folder note
+buttons, and Open History expands the originating Run. History triangles are larger.
 
 The first launch uses a landscape window fitted to the available screen. Later launches restore the last window size and position, including a manually chosen portrait size. Existing saved geometry is retained during updates. The table and service headers extend to the window edges; spacing stays inside cells and controls.
 
@@ -118,7 +123,7 @@ Production launch is exclusively through the built native application. Legacy sh
 
 ## Verification (2026-10-28)
 
-Release 1.7.1 passes 129 automated tests, including the packaged backend without
+Release 1.7.2 passes 136 automated tests, including the packaged backend without
 external executables. Coverage includes folder-mtime ordering, landscape/portrait/
 ultrawide fitting, all output formats, HDR resizing and rollback, estimate sample
 limits, cache invalidation, preview reuse, cancellation/scratch cleanup, source-pair
@@ -127,6 +132,10 @@ for folders sharing a note through import/rollback. Native checks confirm 18px
 suggestions/badges, Size estimates, maximum-resolution labels, and pixel captions.
 Responsive checks cover 320–1920px without horizontal overflow; preview Format
 changes stay local to the selected folder. Only disposable fixtures are used.
+Additional 1.7.2 coverage verifies grouped Format scope, decimal byte formatting,
+series/work metadata, bracketed bare episode numbers, saved mode priority, and
+heading-specific result URIs. UI checks verify selected-row colors in both themes,
+per-result note buttons, and automatic expansion of the report's Run in History.
 
 Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
 10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,

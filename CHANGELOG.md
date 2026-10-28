@@ -4,6 +4,17 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.2 - 2026-10-29
+
+- Add an explicit Format copy action for all folders sharing the exact same Note; ordinary selector changes remain per-folder, and Quality/Resolution/JXR-PNG choices are preserved.
+- Enlarge History disclosure triangles without increasing button size.
+- Add per-folder Obsidian buttons to completed Run reports, targeting the correct episode/work heading. Open History expands and scrolls to the originating Run.
+- Use shared decimal KB/MB/GB formatting to match Finder, correcting binary values previously labeled as decimal units. Raw bytes, sorting, journals, outputs, and compression ratios are unchanged.
+- Tint selected rows in light/dark themes and accent-fill the selected folder/screenshot totals; update the styling for individual, range, group, and bulk selections.
+- Use Note type/classification tags and categories to infer Work/Episode mode on scan and manual note selection, while preserving saved manual overrides. Series notes no longer require a recognized filename number to enter Episode mode; unknown episodes remain blank.
+- Recognize bare episode numbers before bracketed technical labels, such as Example Show 23 [BDrip 1280x720] → S1E23, including when a saved/manual Episode mode fills numbers.
+- Verify all 136 automated tests and disposable native/browser fixtures, including group Format scope, metadata and saved-mode priority, decimal units, result note targets, History expansion, both selection themes, and responsive controls from 320 to 1920 pixels.
+
 ## 1.7.1 - 2026-10-28
 
 - Reduce note-suggestion pills and matching badges to 18px with consistent 11px text, removing inherited full-size button height and shortening table rows.

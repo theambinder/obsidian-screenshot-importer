@@ -9,7 +9,8 @@ import { resolveParallelImages } from './conversionBatch.mjs';
 import { APP_VERSION } from './version.mjs';
 import { ensureArchiveRoot, trashArchive, trashRunArchive, trashRunItemArchive } from './archive.mjs';
 import { scanMedia } from './mediaIndex.mjs';
-import { inferMode, outputExtensionForFormat, parseSourceName, suggestNotes } from './matcher.mjs';
+import { outputExtensionForFormat, parseSourceName, suggestNotes } from './matcher.mjs';
+import { noteModeInfo } from '../public/mediaMode.js';
 import { loadRules, rememberRule } from './rules.mjs';
 import { listRuns, rollbackRun, rollbackRunItem } from './rollback.mjs';
 import { scanScreenshotFolders } from './screenshotScanner.mjs';
@@ -123,7 +124,8 @@ async function handleApi(req, res, url) {
       const parsed = parseSourceName(folder.name);
       const match = suggestNotes(parsed, notes, rules);
       const savedMode = settings.noteModes[match.selected?.path];
-      const mode = savedMode || inferMode(match.selected, parsed);
+      const modeInfo = noteModeInfo(match.selected, parsed);
+      const mode = savedMode || modeInfo.mode;
       const detectedEpisode = { season: parsed.season, episode: parsed.episode };
       if (mode === 'episode' && parsed.season == null) parsed.season = 1;
       return {
@@ -131,7 +133,7 @@ async function handleApi(req, res, url) {
         parsed,
         detectedEpisode,
         mode,
-        modeReason: savedMode ? 'Saved mode for this note' : parsed.mode === 'episode' ? `Detected: ${parsed.pattern}` : 'No episode pattern detected in the folder name',
+        modeReason: savedMode ? 'Saved mode for this note' : modeInfo.reason,
         selectedNotePath: match.selected?.path || '',
         selectedNoteLabel: match.selected?.label || '',
         confidence: match.confidence,

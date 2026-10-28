@@ -57,6 +57,20 @@ function collectSearchNames(noteName, frontmatter) {
   return [...names];
 }
 
+function modeHint(frontmatter) {
+  const values = [frontmatter.type, frontmatter.media_type, frontmatter.mediaType, frontmatter.tags]
+    .flat().filter((value) => typeof value === 'string')
+    .flatMap((value) => value.replace(/^\[|\]$/g, '').split(','))
+    .map((value) => value.trim().replace(/^['"#]+|['"]+$/g, '').split('/').pop().toLowerCase().replace(/[ _-]/g, ''));
+  if (values.some((value) => ['series', 'tvseries', 'tvshow', 'show'].includes(value))) {
+    return { modeHint: 'episode', modeHintReason: 'Note type/tag: series' };
+  }
+  if (values.some((value) => ['movie', 'film', 'game', 'manga', 'comic', 'comics'].includes(value))) {
+    return { modeHint: 'screenshots', modeHintReason: 'Note type/tag: work' };
+  }
+  return {};
+}
+
 export async function scanMedia(config) {
   const notes = [];
   for (const mediaDir of config.mediaDirs) {
@@ -75,6 +89,7 @@ export async function scanMedia(config) {
         absolutePath: filePath,
         noteName,
         mediaDir,
+        ...modeHint(frontmatter),
         prefix: mediaDir[0].toUpperCase(),
         label: `[${mediaDir[0].toUpperCase()}] ${noteName}`,
         searchNames,

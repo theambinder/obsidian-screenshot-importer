@@ -54,12 +54,7 @@ export function tokenize(value) {
     .filter((token) => token.length > 1 && !ignored.has(token) && !/^\d{3,4}p$/.test(token));
 }
 
-export function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
+export { formatBytes } from '../public/formatBytes.js';
 
 export async function pathExists(target) {
   try {
