@@ -62,7 +62,7 @@ if (withHdr) {
   const hdrFolder = path.join(locations.screenshotsRoot, 'HDR Game');
   await fs.mkdir(hdrFolder, { recursive: true });
   for (const extension of ['jxr', 'png']) {
-    await fs.copyFile(path.join(projectRoot, `tests/fixtures/hdr-scrgb.${extension}`), path.join(hdrFolder, `capture.${extension}`));
+    await fs.copyFile(path.join(projectRoot, `tests/fixtures/hdr-1080.${extension}`), path.join(hdrFolder, `capture.${extension}`));
   }
   await fs.writeFile(path.join(locations.dataDir, 'settings.json'), JSON.stringify({ qualityDefaults: { Games: 40 } }));
 }

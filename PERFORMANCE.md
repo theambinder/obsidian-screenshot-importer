@@ -59,6 +59,21 @@ perceptual equivalence to WebP/JPEG quality or a promised compression ratio. Siz
 and brightness comparisons must use a color-managed HDR viewer/display. All
 source counterparts remain in the archive regardless of selection.
 
+## Estimates and Resizing: 1.7.0
+
+Background estimates encode at most two selected images per folder/settings version,
+not the entire folder. Only visible rows request work, one estimate runs at a time,
+and a short idle interval separates folders. Quality/resolution changes are debounced.
+The backend caches folder results and measured samples, including completed previews;
+changed inputs/settings invalidate their keys. Import, rollback, Trash, and shutdown
+cancel active and queued estimates. Approximate values remain sample-based and may
+differ significantly for mixed image content, dimensions, or formats.
+
+Source dimensions are read from ImageIO/JXR metadata. Optional downscaling reduces
+the pixels sent to the encoder and can reduce encoding time, but input reading and
+JXR decoding still occur at original resolution. No speedup or file-size percentage
+is guaranteed. Original/copy SDR output is not resized or re-encoded.
+
 ## Safety and Reproduction
 
 Only image encoding is parallel. A bounded batch is fully drained before ordered publication; failures and early exits clean scratch files. `increment`, `reuse`, `skip`, and `overwrite` resolve their names at serial commit time, including duplicate basenames such as `a.jpg` and `a.png`. Original/copy mode avoids staging overhead. Completed mutations retain the existing checkpoints, backups, hashes, sorted episode insertion, and rollback behavior.

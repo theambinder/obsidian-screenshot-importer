@@ -363,6 +363,7 @@ function validateSelection(selection) {
 function conversionForSelection(baseConversion, selection) {
   const input = { ...baseConversion };
   if (selection.quality != null && selection.quality !== '') input.quality = selection.quality;
+  for (const key of ['resolution', 'format', 'effort']) if (selection[key] != null) input[key] = selection[key];
   return normalizeConversionSettings(input);
 }
 

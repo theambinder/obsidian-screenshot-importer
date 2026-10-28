@@ -4,6 +4,16 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.0 - 2026-10-28
+
+- Match Finder's default Date Modified order using the source directory's own modification time, newest first. Show the same date beneath Folder; keep the newest-image timestamp separately for diagnostics. Reset sort returns to folder Date Modified order.
+- Move per-folder JXR/PNG choices out of table rows into Compression Preview, retaining the global Settings default without increasing row height.
+- Add codec-specific Quality tooltips: WebP quality/effort, JPEG quantizer, AVIF CRF/bit depth/chroma/color metadata, and explicit lossless/copy behavior for PNG/Original. Show full folder names on hover and narrow Folder/Note controls and note-suggestion text.
+- Add Resolution beside Quality, with Original, 720p, 1080p, 1440p, and 4K; default to 1080p or smaller. Preserve aspect ratios, fit portrait/ultrawide images, respect EXIF orientation, and never upscale. Apply the choice to matching Note rows, real imports, previews, and estimates. Show sampled source dimensions in pixels and exact output dimensions in the tooltip/preview. Preserve HDR during JXR resizing.
+- Estimate output size beneath Quality and show sampled source/output resolution. Encode at most two representative images, only for visible folders, with serialized background work, cancellation during mutations, debounce, and bounded caches. Estimates honor paired-source selection; approximate values are clearly marked.
+- Show estimated folder output and per-image output sizes in Compression Preview. Replace estimates with exact sizes for converted samples, reuse completed preview encodes, and apply format/effort/resolution/quality together through Apply Settings.
+- Bundle a small ImageIO metadata reader and add JXR metadata-only inspection. Detect dimensions without decoding every source image. Add regression coverage for ordering, resize/HDR metadata, estimator caching/cancellation, pair policies, previews, and packaged execution.
+
 ## 1.6.0 - 2026-10-28
 
 - Import floating-point scRGB HDR JXR captures as 10-bit 4:4:4 AVIF with explicit BT.2020/PQ color metadata and an 80-nit scRGB reference white. Keep dimensions and unclipped HDR values; bundle the decoder and AV1/color-conversion libraries for offline use without external installations.

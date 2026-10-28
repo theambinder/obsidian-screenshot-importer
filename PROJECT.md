@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.6.0**. The authoritative version is `package.json`.
+Current version: **1.7.0**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -75,8 +75,17 @@ Supported output formats are WebP, JPEG, PNG, AVIF, and original. WebP uses cweb
 JPEG, PNG, and AVIF use the bundled minimal FFmpeg. Original copies SDR inputs
 without encoding. JXR always resolves to HDR AVIF, including in Original mode.
 WebP Quality is 1-100. WebP Effort is 0-6 (`cwebp -m`): encoding effort, not visual
-quality. Higher effort can reduce size at the cost of processing time. No resizing
-is performed. Conversion preserves the base filename and changes its extension.
+quality. Higher effort can reduce size at the cost of processing time. Conversion
+preserves the base filename and changes its extension. Resolution defaults to 1080p;
+optional 720/1080/1440/2160 presets fit a 16:9 box, rotated for portrait images,
+preserving aspect ratio and never upscaling. WebP uses cwebp resizing, other encoders
+use Lanczos scaling. HDR resampling happens in the linear-to-PQ zimg pipeline. Copy
+mode ignores resizing for SDR inputs. `resolution` is captured in per-folder journals.
+The table shows sampled source width/height in pixels rather than classifying arbitrary
+images as 4K/1080p. Output dimensions are in its tooltip and converted preview.
+For example, 3140×2200 fits to 1541×1080; smaller originals are unchanged.
+ImageIO reports display-oriented dimensions for EXIF-rotated photos. WebP conversion
+normalizes EXIF orientation before resizing, avoiding a raw/display dimension mismatch.
 
 Floating-point linear scRGB JXR uses the bundled `jxr-decode` helper, based on
 Microsoft jxrlib. Half/float RGB and opaque RGBA captures are accepted; integer,
@@ -112,7 +121,9 @@ apply to every row sharing the Note. Output settings are captured for each impor
 Preview has a thumbnail file list with total count/size, stacked original/converted
 images, central detail crops, output size, and isolated temporary encoder settings.
 Clicking an image opens a separate native image window. Apply Quality propagates
-the chosen quality to the note group and closes the dialog. Suggested quality is
+the chosen quality to the note group and closes the dialog. Since 1.7.0 this command
+is Apply Settings and includes format, effort, and resolution overrides, retained per
+Note during the session. Suggested quality is
 the knee of a tested file-size curve, not a perceptual-quality guarantee; visual
 inspection remains necessary. Preview files are temporary and never enter history.
 
@@ -123,6 +134,24 @@ bounded preview cache. AVIF suggestions reuse one floating-point decode across
 candidates. HDR folder batches use at most two encoders to bound memory. Actual
 HDR display depends on WebKit, OS, viewer, and display capability; a reference is
 not a guarantee of HDR presentation on every supported Mac.
+
+`src/compressionEstimate.mjs` encodes at most two representative selected images:
+one per input/encoding group where possible, otherwise the first and middle image.
+Per-group byte ratios estimate the remaining images; unusual extra groups fall back
+to the combined sample ratio. Copy outputs use exact source bytes. Only visible
+table rows request estimates; preview requests are debounced. A single background
+queue, abort signals, a 128-entry/30-minute folder cache, and a 256-entry sample cache
+bound repeated work. Keys include source sizes/timestamps and encoding settings;
+completed previews seed the sample cache. Imports, rollback, Trash, and shutdown
+cancel outstanding estimates. Approximate sizes carry an approximation marker;
+sampled source/output dimensions can flag mixed dimensions. No estimate writes to
+the source folder, vault, history, or settings. Native `image-info` uses ImageIO
+metadata without pixel caching; JXR --info avoids floating-point decoding.
+
+Scan order and the displayed Date Modified use directory mtime, matching Finder,
+not the newest contained image. The latter remains `latestMtimeMs` for source
+diagnostics; directory mtime is `modifiedMs`. Explicit column sorting survives Refresh;
+Reset sort restores the newest-directory-first scan order.
 
 Parallel Images supports Auto/1/2/3/4. Bounded workers encode scratch files while
 note edits, output publication, conflict resolution, and journaling remain serial.

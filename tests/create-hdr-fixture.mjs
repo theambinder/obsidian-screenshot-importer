@@ -9,7 +9,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const destination = path.resolve(process.argv[2] || path.join(root, 'tests/fixtures'));
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'obsidian-hdr-fixture-'));
 try {
-  const width = 64, height = 48;
+  const width = Number(process.argv[3] || 64), height = Number(process.argv[4] || 48);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 16_000_000) throw new Error('Invalid fixture dimensions');
   const tags = [[256, 4, 1, width], [257, 4, 1, height], [258, 3, 4, 0],
     [259, 3, 1, 1], [262, 3, 1, 2], [273, 4, 1, 0], [277, 3, 1, 4],
     [278, 4, 1, height], [279, 4, 1, width * height * 8], [284, 3, 1, 1],
@@ -36,7 +37,7 @@ try {
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const index = y * width + x;
     for (let channel = 0; channel < 3; channel++) {
-      tiff.writeUInt16LE(levels[Math.min(4, Math.floor(x / 13))], pixels + index * 8 + channel * 2);
+      tiff.writeUInt16LE(levels[Math.min(4, Math.floor(x / Math.ceil(width / 5)))], pixels + index * 8 + channel * 2);
       rgb[index * 3 + channel] = Math.round(x / (width - 1) * 255);
     }
     tiff.writeUInt16LE(0x3c00, pixels + index * 8 + 6);

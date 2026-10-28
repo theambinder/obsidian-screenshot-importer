@@ -47,6 +47,7 @@ SOURCES="$STAGING/Sources"
 mkdir -p "$APP/Contents/MacOS" "$RES/bin" "$RES/app" "$RES/Licenses" "$SOURCES"
 /bin/bash scripts/build-native-helpers.sh
 cp build/bin/preserve-creation-time "$RES/bin/preserve-creation-time"
+cp build/bin/image-info "$RES/bin/image-info"
 cp build/bin/jxr-decode "$RES/bin/jxr-decode"
 cp macos/DesktopInfo.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"

@@ -19,6 +19,9 @@ import { convertImage, conversionForImage, withConversionSource } from './conver
 import { PreviewCache } from './previewCache.mjs';
 import { HdrReferenceCache } from './hdrReference.mjs';
 import { isJxr } from '../public/imageSelection.js';
+import { CompressionEstimator } from './compressionEstimate.mjs';
+import { imageInfo } from './imageInfo.mjs';
+import { targetDimensions } from '../public/conversionProfile.js';
 import { pathComponent, sourceFolderPath as checkedSourceFolderPath, assertRealInside } from './paths.mjs';
 import { assertInside, commandVersion, formatBytes, IMAGE_EXTENSIONS, naturalCompare, pathExists, readJson, runCommand } from './utils.mjs';
 
@@ -28,6 +31,7 @@ export function createAppServer(config = resolveConfig(), { updater = null } = {
 const jobs = new Map();
 const previews = new PreviewCache();
 const hdrReferences = new HdrReferenceCache(previews);
+const estimator = new CompressionEstimator();
 let mutationActive = false;
 let activeJobId = null;
 let pendingWrites = 0;
@@ -314,7 +318,11 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  if (url.pathname === '/api/source-files' && req.method === 'POST') {
+  if (['/api/source-files', '/api/estimate-folder'].includes(url.pathname) && req.method === 'POST') {
+    if (url.pathname === '/api/estimate-folder' && (mutationActive || stopping)) {
+      sendJson(res, { error: 'Background estimates are paused during an operation' }, 409);
+      return;
+    }
     const payload = await readBody(req);
     const folderPath = sourceFolderPath(payload.folder || '');
     await assertRealInside(config.screenshotsRoot, folderPath);
@@ -342,6 +350,15 @@ async function handleApi(req, res, url) {
       });
     }
     files.sort((a, b) => naturalCompare(a.name, b.name));
+    if (url.pathname === '/api/estimate-folder') {
+      const controller = new AbortController();
+      const abort = () => { if (!res.writableEnded) controller.abort(); };
+      res.once('close', abort);
+      try {
+        sendJson(res, await estimator.estimate(folderPath, files, payload.conversion || {}, payload.duplicateMode, { signal: controller.signal }));
+      } finally { res.off('close', abort); }
+      return;
+    }
     sendJson(res, { folder: payload.folder || '', files });
     return;
   }
@@ -369,10 +386,14 @@ async function handleApi(req, res, url) {
         fs.stat(outputPath),
       ]);
       const outputData = await fs.readFile(outputPath);
+      const sourceDimensions = await imageInfo(inputPath, { signal: controller.signal });
+      estimator.remember(inputPath, inputStat, conversion, outputStat.size, sourceDimensions);
       sendJson(res, {
         folder: payload.folder || '',
         file: payload.file || '',
         conversion,
+        sourceDimensions,
+        outputDimensions: targetDimensions(sourceDimensions, conversion.resolution),
         sourceBytes: inputStat.size,
         outputBytes: outputStat.size,
         outputSize: formatBytes(outputStat.size),
@@ -626,8 +647,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, { error: 'The application is shutting down' }, 503);
         return;
       }
-      pendingWrites += 1;
-      ownsWrite = true;
+      if (url.pathname !== '/api/estimate-folder') {
+        pendingWrites += 1;
+        ownsWrite = true;
+      }
     }
     if (req.method === 'POST' && exclusivePaths.has(url.pathname)) {
       if (mutationActive) {
@@ -635,6 +658,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       mutationActive = true;
+      estimator.cancelAll();
       ownsMutation = true;
     }
     if (url.pathname.startsWith('/api/')) {
@@ -651,7 +675,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.isBusy = () => mutationActive || pendingWrites > 0;
-server.prepareShutdown = () => { stopping = true; };
+server.prepareShutdown = () => { stopping = true; estimator.cancelAll(); };
 server.prepareUpdate = () => {
   if (stopping || server.isBusy()) throw new Error('Wait for the current operation to finish before installing an update');
   if (!updater?.downloaded) throw new Error('Download and verify an update before installing it');

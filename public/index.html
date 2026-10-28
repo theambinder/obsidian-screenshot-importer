@@ -44,7 +44,7 @@
           </div>
           <div class="toolbar-actions">
             <select id="folderSortSelect" class="compact-sort" aria-label="Sort folders">
-              <option value="">Scan order</option>
+              <option value="">Date Modified ↓</option>
               <option value="source:asc">Folder ↑</option>
               <option value="source:desc">Folder ↓</option>
               <option value="size:asc">Size ↑</option>
@@ -56,7 +56,7 @@
               <option value="episode:asc">Episode ↑</option>
               <option value="episode:desc">Episode ↓</option>
             </select>
-            <button id="resetSortButton" class="button-with-icon" type="button" title="Reset sorting to scan order" disabled><span class="ui-icon icon-undo" aria-hidden="true"></span>Reset sort</button>
+            <button id="resetSortButton" class="button-with-icon" type="button" title="Reset to folder Date Modified, newest first" disabled><span class="ui-icon icon-undo" aria-hidden="true"></span>Reset sort</button>
             <button id="scanButton" class="button-with-icon" type="button"><span class="ui-icon icon-refresh" aria-hidden="true"></span>Refresh</button>
             <button id="selectAllButton" type="button">Select all</button>
             <button id="toggleMatchedButton" type="button">Select matched</button>
@@ -72,6 +72,7 @@
               <col class="col-size">
               <col class="col-note">
               <col class="col-quality">
+              <col class="col-resolution">
               <col class="col-mode">
               <col class="col-episode">
             </colgroup>
@@ -82,13 +83,14 @@
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="size" data-sort-label="Size">Size <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="note" data-sort-label="Note">Note <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th><span class="column-label">Quality</span></th>
+                <th><span class="column-label">Resolution</span></th>
                 <th><span class="column-label">Mode</span></th>
                 <th class="episode-sort-header"><div class="episode-sort-buttons"><button class="sort-button" type="button" data-sort-key="season" data-sort-label="Season">S <span class="sort-indicator" aria-hidden="true">↕</span></button><button class="sort-button" type="button" data-sort-key="episode" data-sort-label="Episode">E <span class="sort-indicator" aria-hidden="true">↕</span></button></div></th>
               </tr>
             </thead>
             <tbody id="foldersBody">
               <tr>
-                <td colspan="7" class="empty">Scanning...</td>
+                <td colspan="8" class="empty">Scanning...</td>
               </tr>
             </tbody>
           </table>
@@ -185,6 +187,16 @@
                   <option value="both">Both</option>
                 </select>
               </label>
+              <label>
+                Default Resolution
+                <select id="resolutionSelect" aria-label="Default Resolution">
+                  <option value="original">Original</option>
+                  <option value="720">720p</option>
+                  <option value="1080" selected>1080p</option>
+                  <option value="1440">1440p</option>
+                  <option value="2160">4K</option>
+                </select>
+              </label>
             </div>
             <div class="encoding-details">JXR: HDR AVIF · 10-bit · 4:4:4</div>
           </section>
@@ -238,6 +250,7 @@
           <div>
             <h2 id="previewTitle">Compression Preview</h2>
             <div id="previewFolderTitle" class="result-meta"></div>
+            <div id="previewFolderEstimate" class="result-meta"></div>
           </div>
           <button id="closePreviewButton" class="icon-button" type="button" aria-label="Close">×</button>
         </div>
@@ -280,7 +293,17 @@
               <option value="both">Both</option>
             </select>
           </label>
-          <button id="applyPreviewQualityButton" class="primary" type="button">Apply Quality</button>
+          <label>
+            Resolution
+            <select id="previewResolutionSelect" aria-label="Preview Resolution">
+              <option value="original">Original</option>
+              <option value="720">720p</option>
+              <option value="1080">1080p</option>
+              <option value="1440">1440p</option>
+              <option value="2160">4K</option>
+            </select>
+          </label>
+          <button id="applyPreviewQualityButton" class="primary" type="button">Apply Settings</button>
         </div>
 
         <div class="preview-body">

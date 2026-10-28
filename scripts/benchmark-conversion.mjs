@@ -51,7 +51,7 @@ try {
         items.push({ sourceFolderName: sample.category, notePath: `Media/${sample.category}/${sample.category}.md`, mode: 'episode', season: 1, episode: 1, quality: sample.quality });
       }
       const Job = mode === 'legacy' ? LegacyJob : ImportJob;
-      const job = new Job(config, { items, parallelImages: Number(mode), conversion: { format: 'webp', quality: 90, effort: 6 } });
+      const job = new Job(config, { items, parallelImages: Number(mode), conversion: { format: 'webp', quality: 90, effort: 6, resolution: 'original' } });
       const start = performance.now();
       await job.run();
       const seconds = (performance.now() - start) / 1000;

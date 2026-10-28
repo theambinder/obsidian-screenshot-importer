@@ -176,7 +176,7 @@ test('portable bundle converts all formats and finishes an import before shutdow
   for (const format of ['webp', 'jpg', 'png', 'avif', 'original']) {
     const response = await fetch(`${url}/api/preview-conversion`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ folder: 'Show.S01E01', file: 'shot.png', conversion: { format, quality: 80, effort: 3 } }),
+      body: JSON.stringify({ folder: 'Show.S01E01', file: 'shot.png', conversion: { format, quality: 80, effort: 3, resolution: '720' } }),
     });
     const preview = await response.json();
     assert.equal(response.status, 200, JSON.stringify(preview));
@@ -196,6 +196,14 @@ test('portable bundle converts all formats and finishes an import before shutdow
   assert.equal(hdrPreview.conversion.crf, 16);
   assert.equal(hdrPreview.conversion.hdr, true);
   assert.equal(hdrPreview.mimeType, 'image/avif');
+  const estimateResponse = await fetch(`${url}/api/estimate-folder`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ folder: 'Show.S01E01', conversion: { format: 'webp', quality: 40, resolution: '720' } }),
+  });
+  const estimate = await estimateResponse.json();
+  assert.equal(estimateResponse.status, 200, JSON.stringify(estimate));
+  assert.equal(estimate.selectedCount, 2);
+  assert.equal(estimate.files.find((file) => file.name === 'hdr.png').included, false);
   const source = await fs.readFile(path.join(folder, 'shot.png'));
   for (let n = 1; n <= 6; n += 1) await fs.writeFile(path.join(folder, `shot${n}.png`), source);
   const run = await fetch(`${url}/api/run`, {

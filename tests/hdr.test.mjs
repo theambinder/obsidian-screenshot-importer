@@ -49,7 +49,7 @@ test('AVIF quality maps monotonically across the complete CRF range with Q40 = C
   assert.equal(qualityToCrf(40), 16);
   assert.equal(qualityToCrf(100), 0);
   for (let q = 2; q <= 100; q++) assert.ok(qualityToCrf(q) <= qualityToCrf(q - 1));
-  assert.deepEqual(conversionForImage('capture.jxr', { format: 'original', quality: 40 }), { format: 'avif', quality: 40, crf: 16, effort: 6, conflictPolicy: 'increment', hdr: true });
+  assert.deepEqual(conversionForImage('capture.jxr', { format: 'original', quality: 40 }), { format: 'avif', quality: 40, crf: 16, effort: 6, conflictPolicy: 'increment', resolution: '1080', hdr: true });
 });
 
 test('pair policy filters only actual same-name counterparts, keeping unrelated and unpaired images', () => {

@@ -42,8 +42,10 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 - Detect seasons and episodes, including episode zero. Change Work/Episode for all
   folders sharing a Note, with remembered per-note mode and individual number detection. Keep episodes in numeric
   order, reuse padded/commented headings, and preserve existing note text.
-- Convert to WebP, JPEG, PNG, AVIF, or keep SDR originals. Preserve filenames and dimensions;
+- Convert to WebP, JPEG, PNG, AVIF, or keep SDR originals. Preserve filenames;
   preview original/converted images and detail crops before applying quality.
+- Choose Original, 720p, 1080p, 1440p, or 4K output resolution, without distortion or
+  upscaling. Review estimated folder/image sizes from a small cached sample before importing.
 - Convert HDR JXR captures to 10-bit 4:4:4 PQ AVIF. Select JXR only (default), PNG only,
   or Both for same-name pairs; archive and restore all originals, including unconverted counterparts.
 - Set category defaults and per-note quality; convert batches in parallel.
@@ -79,6 +81,34 @@ in the separate data folder, which is excluded from Git and release archives.
 Sharing that folder between Macs requires the same paths for old rollback history;
 use one Mac at a time and let synchronization finish before switching.
 
+## Resolution, Estimates, and Ordering
+
+The default order is the source **folder's Date Modified**, newest first, matching
+Finder. It is not the date of the newest screenshot inside the folder. **Reset sort**
+restores this order; Refresh retains an explicitly selected column sort.
+
+**Resolution** defaults to **1080p or smaller**. Presets fit the corresponding 16:9 bounds,
+rotate the bounds for portrait images, preserve aspect ratio, and never enlarge a
+smaller source. Settings stores the default; changes in the table apply to matching
+Note rows. Original/copy format does not resize SDR files. JXR always uses HDR AVIF
+and can be resized even when the regular-image default is Original.
+
+1080p is a maximum fitting box, not a forced aspect ratio: 3140×2200 becomes
+approximately 1541×1080, while 1280×720 stays unchanged. The table shows sampled
+source dimensions in pixels below Resolution; its tooltip and the converted preview
+show the exact output dimensions. No cropping or stretching is applied. Original
+keeps full dimensions when explicitly selected. Existing saved resolution choices
+are retained.
+
+Output sizes marked **≈** are estimates based on at most two actual sample encodes
+per folder/settings combination, not guarantees. Only visible folders are processed
+in the background, one estimate at a time. Results and samples are cached, and
+background estimation stops during import, rollback, Trash, or shutdown. Preview
+shows folder/image estimates and exact sizes for already converted samples. Apply
+Settings applies the preview's quality, format, effort, and resolution to matching
+Note rows; paired-source selection remains per folder. Estimates describe selected
+outputs, whereas archive totals include all originals, including omitted counterparts.
+
 ## HDR Captures and Paired Originals
 
 Floating-point linear scRGB `.jxr` captures are converted to HDR AVIF, regardless of
@@ -88,7 +118,7 @@ Compression Preview shows the actual CRF, HDR reference, converted image, and fi
 Category quality defaults and per-note overrides are retained; HDR does not reset them.
 
 **Settings > JXR / PNG Pairs** sets the default for files sharing a basename in the
-same folder. Individual folders and Compression Preview can override it. The choice
+same folder. Compression Preview can override it for an individual folder. The choice
 affects paired files only, not unrelated or unpaired images. With **Both** and AVIF output,
 the PNG counterpart uses `.sdr.avif` to avoid overwriting the HDR `.avif`.
 

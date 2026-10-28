@@ -19,9 +19,11 @@ int main(int argc, char **argv) {
         puts("jxr-decode 1.0 (Microsoft jxrlib)");
         return 0;
     }
-    if (argc != 3) return failure("Usage: jxr-decode input.jxr output.raw");
+    if (argc != 3) return failure("Usage: jxr-decode input.jxr output.raw | --info input.jxr");
+    int info_only = strcmp(argv[1], "--info") == 0;
+    const char *input_path = argv[info_only ? 2 : 1];
     struct stat source;
-    if (lstat(argv[1], &source) || !S_ISREG(source.st_mode)) return failure("JXR input must be a regular file");
+    if (lstat(input_path, &source) || !S_ISREG(source.st_mode)) return failure("JXR input must be a regular file");
     PKCodecFactory *factory = NULL;
     PKImageDecode *decoder = NULL;
     void *pixels = NULL;
@@ -29,7 +31,7 @@ int main(int argc, char **argv) {
     FILE *output = NULL;
     int result = 1, created = 0;
     if (Failed(PKCreateCodecFactory(&factory, WMP_SDK_VERSION)) ||
-        Failed(factory->CreateDecoderFromFile(argv[1], &decoder))) goto cleanup;
+        Failed(factory->CreateDecoderFromFile(input_path, &decoder))) goto cleanup;
     I32 width = 0, height = 0;
     PKPixelFormatGUID guid;
     if (Failed(decoder->GetSize(decoder, &width, &height)) || Failed(decoder->GetPixelFormat(decoder, &guid))) goto cleanup;
@@ -48,6 +50,11 @@ int main(int argc, char **argv) {
     U32 profile_size = 0;
     if (!Failed(decoder->GetColorContext(decoder, NULL, &profile_size)) && profile_size) {
         failure("ICC-tagged JXR cannot be safely assumed to be linear scRGB");
+        goto cleanup;
+    }
+    if (info_only) {
+        printf("{\"width\":%d,\"height\":%d}\n", width, height);
+        result = 0;
         goto cleanup;
     }
     size_t count = (size_t)width * height;

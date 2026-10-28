@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ensureDir, runCommand } from './utils.mjs';
 import { isJxr, effectiveFormat, qualityToCrf } from '../public/imageSelection.js';
+import { normalizeResolution, targetDimensions, jpegQuantizer } from '../public/conversionProfile.js';
+import { imageInfo } from './imageInfo.mjs';
 
 export function normalizeConversionSettings(input = {}) {
   if (input.format && !['webp', 'jpg', 'png', 'avif', 'original'].includes(input.format)) throw new Error('Unsupported conversion format');
@@ -14,12 +16,14 @@ export function normalizeConversionSettings(input = {}) {
     quality: clampNumber(input.quality, 1, 100, 90),
     effort: clampNumber(input.effort, 0, 6, 6),
     conflictPolicy: input.conflictPolicy || 'increment',
+    resolution: normalizeResolution(input.resolution),
   };
 }
 
 export function conversionForImage(inputPath, settings) {
   const conversion = normalizeConversionSettings(settings);
   conversion.format = effectiveFormat(inputPath, conversion.format);
+  if (conversion.format === 'original') conversion.resolution = 'original';
   if (conversion.format === 'avif') conversion.crf = qualityToCrf(conversion.quality);
   if (isJxr(inputPath)) conversion.hdr = true;
   return conversion;
@@ -96,14 +100,15 @@ export async function publishStagedImage(stagedPath, outputPath) {
 async function encodeImage(inputPath, outputPath, settings, options) {
   await ensureDir(path.dirname(outputPath));
   if (settings.format === 'avif') {
-    const encode = (decoded) => {
+    const encode = async (decoded) => {
       const hdr = Boolean(decoded);
+      const size = settings.resolution === 'original' ? null : targetDimensions(decoded || await imageInfo(inputPath, options), settings.resolution);
       const color = hdr ? ['bt2020', 'smpte2084', 'bt2020nc'] : ['bt709', 'iec61966-2-1', 'bt709'];
       return runCommand('ffmpeg', [
         '-hide_banner', '-loglevel', 'error', '-y',
         ...(hdr ? hdrInputArgs(decoded) : ['-i', inputPath]), '-frames:v', '1',
-        '-vf', hdr ? `${HDR_TRANSFORM}:m=bt2020nc:dither=error_diffusion,format=yuv444p10le`
-          : 'scale=out_color_matrix=bt709:out_range=full,format=yuv444p10le,setparams=range=full:color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709',
+        '-vf', hdr ? `${HDR_TRANSFORM}${size ? `:w=${size.width}:h=${size.height}:filter=lanczos` : ''}:m=bt2020nc:dither=error_diffusion,format=yuv444p10le`
+          : `scale=${size ? `w=${size.width}:h=${size.height}:flags=lanczos:` : ''}out_color_matrix=bt709:out_range=full,format=yuv444p10le,setparams=range=full:color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709`,
         '-c:v', 'libaom-av1', '-usage', 'allintra', '-still-picture', '1',
         '-cpu-used', '6', '-threads', '2', '-row-mt', '1',
         '-crf', String(settings.crf), '-b:v', '0',
@@ -121,27 +126,41 @@ async function encodeImage(inputPath, outputPath, settings, options) {
     return;
   }
 
+  const sourceInfo = settings.resolution !== 'original' || settings.format === 'webp' ? await imageInfo(inputPath, options) : null;
+  const size = settings.resolution === 'original' ? null : targetDimensions(sourceInfo, settings.resolution);
+  const resizeArgs = size ? ['-vf', `scale=${size.width}:${size.height}:flags=lanczos`] : [];
+
   if (settings.format === 'webp') {
-    await runCommand('cwebp', [
-      '-q', String(settings.quality),
-      '-m', String(settings.effort),
-      '-mt',
-      '-quiet',
-      inputPath,
-      '-o',
-      outputPath,
-    ], options);
+    // cwebp does not apply EXIF orientation; normalize it before resizing.
+    const orientedPath = sourceInfo?.orientation ? `${outputPath}.oriented.png` : null;
+    try {
+      if (orientedPath) await runCommand('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', inputPath,
+        '-frames:v', '1', ...resizeArgs, orientedPath], options);
+      await runCommand('cwebp', [
+        '-q', String(settings.quality),
+        '-m', String(settings.effort),
+        '-mt',
+        '-quiet',
+        ...(size && !orientedPath ? ['-resize', String(size.width), String(size.height)] : []),
+        orientedPath || inputPath,
+        '-o',
+        outputPath,
+      ], options);
+    } finally {
+      if (orientedPath) await fs.rm(orientedPath, { force: true });
+    }
     return;
   }
 
   if (settings.format === 'jpg') {
-    const qv = Math.max(2, Math.min(31, Math.round(31 - (settings.quality / 100) * 29)));
+    const qv = jpegQuantizer(settings.quality);
     await runCommand('ffmpeg', [
       '-hide_banner',
       '-loglevel', 'error',
       '-y',
       '-i', inputPath,
       '-frames:v', '1',
+      ...resizeArgs,
       '-q:v', String(qv),
       outputPath,
     ], options);
@@ -155,6 +174,7 @@ async function encodeImage(inputPath, outputPath, settings, options) {
       '-y',
       '-i', inputPath,
       '-frames:v', '1',
+      ...resizeArgs,
       '-compression_level', '9',
       outputPath,
     ], options);

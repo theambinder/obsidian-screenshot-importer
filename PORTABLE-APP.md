@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.6.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.6.0-Sources.zip` is a separate optional release asset, not required to run or update the app.
+1. Download `Obsidian-Screenshot-Importer-1.7.0-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.0-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -41,6 +41,17 @@ Only one Mac should operate on synchronized data at a time, after iCloud has fin
 ## Window Behavior
 
 The existing Screenshots, History, Settings, compression previews, native Trash, and rollback features run in a WKWebView window. Image links open separate **Image Preview** windows. Closing an image window does not quit the app; closing the main window does. Obsidian note links open the installed Obsidian app. macOS can ask the app for permission to access protected folders or Trash.
+
+From 1.7.0, Quality has detailed codec tooltips and sampled size estimates.
+Resolution defaults to 1080p or smaller, with Original/720p/1080p/1440p/4K choices and
+sampled source dimensions in pixels; exact output dimensions appear in the tooltip
+and preview. No cropping or stretching is applied. Small native ImageIO/JXR metadata readers avoid
+decoding every image just to detect dimensions. At most two images are encoded for
+each uncached estimate; only visible table rows request this serialized background
+work, which is cancelled during operations and shutdown. Preview lists estimated
+folder/image sizes and exact measured samples. Apply Settings applies quality,
+format, effort, and resolution to matching Note rows. JXR/PNG selection is in
+Settings and Compression Preview, not an extra line in the table.
 
 The first launch uses a landscape window fitted to the available screen. Later launches restore the last window size and position, including a manually chosen portrait size. Existing saved geometry is retained during updates. The table and service headers extend to the window edges; spacing stays inside cells and controls.
 
@@ -103,6 +114,12 @@ Implementation:
 Production launch is exclusively through the built native application. Legacy shell-launcher templates, dependency installation scripts, and the standalone server entrypoint are removed. Source changes require a rebuild because each app contains an immutable code snapshot. Existing support-directory names and journal identifiers are compatibility data, not alternative launch methods.
 
 ## Verification (2026-10-28)
+
+Release 1.7.0 passes 126 automated tests, including the packaged backend without
+external executables. Coverage includes folder-mtime ordering, landscape/portrait/
+ultrawide fitting, all output formats, HDR resizing and rollback, estimate sample
+limits, cache invalidation, preview reuse, cancellation/scratch cleanup, source-pair
+selection, and per-image preview sizes. Native checks use disposable fixtures only.
 
 Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
 10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,

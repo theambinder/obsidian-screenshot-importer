@@ -3,7 +3,8 @@ import { normalizeTheme, resolveTheme } from './theme.js';
 import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicateEpisodes } from './episodeSelection.js';
 import { createTabScroll } from './tabScroll.js';
 import { createUpdates } from './updates.js';
-import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualityToCrf } from './imageSelection.js';
+import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualityToCrf, effectiveFormat } from './imageSelection.js';
+import { RESOLUTIONS, compressionDescription } from './conversionProfile.js';
 
 const state = {
   config: null,
@@ -20,6 +21,13 @@ const state = {
   visibleFolders: [],
   noteValues: new Map(),
   qualityByNotePath: new Map(),
+  encodingByNotePath: new Map(),
+  estimates: new Map(),
+  estimateRows: new Set(),
+  estimateController: null,
+  estimateTimer: null,
+  estimatePending: false,
+  scanGeneration: 0,
   jobTimer: null,
   activeJobId: null,
   busy: false,
@@ -40,6 +48,11 @@ const state = {
     sourceRequestId: 0,
     conversionController: null,
     suggestionController: null,
+    estimateController: null,
+    estimateTimer: null,
+    estimate: null,
+    estimateKey: '',
+    actualSizes: new Map(),
   },
 };
 
@@ -136,7 +149,14 @@ $('#duplicateModeSelect').addEventListener('change', (event) => {
   renderFolders();
   scheduleSettingsSave();
 });
-$('#previewDuplicateModeSelect').addEventListener('change', renderPreviewFileList);
+$('#previewDuplicateModeSelect').addEventListener('change', () => { renderPreviewFileList(); schedulePreviewEstimate(); });
+$('#previewResolutionSelect').addEventListener('change', handlePreviewEncoderChange);
+for (const control of [els.formatSelect, els.effortSelect]) control.addEventListener('change', renderFolders);
+$('#resolutionSelect').addEventListener('change', (event) => {
+  state.settings.resolution = event.target.value;
+  renderFolders();
+  scheduleSettingsSave();
+});
 els.previewQualityInput.addEventListener('input', schedulePreviewConversion);
 els.previewEffortSelect.addEventListener('change', handlePreviewEncoderChange);
 els.previewSuggestedQualityButton.addEventListener('click', useSuggestedPreviewQuality);
@@ -260,7 +280,9 @@ async function api(path, options = {}) {
     const message = response.headers.get('content-type')?.includes('application/json')
       ? (await response.json()).error
       : await response.text();
-    throw new Error(message || `${response.status} ${response.statusText}`);
+    const error = new Error(message || `${response.status} ${response.statusText}`);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -276,6 +298,8 @@ function setTab(tab, options) {
     setupStickyOffset();
   }, options);
   if (changed && tab === 'history') loadRuns().catch(showFatal);
+  if (tab === 'screenshots') scheduleTableEstimates();
+  else stopTableEstimates();
 }
 
 async function scan({ preserveProgress = false } = {}) {
@@ -284,6 +308,8 @@ async function scan({ preserveProgress = false } = {}) {
   if (ownsBusy) setBusy(true, 'Scanning...');
   try {
     const data = await api('/api/scan');
+    state.scanGeneration++;
+    state.estimates.clear();
     state.config = data.config;
     state.screenshotsSummary = data.screenshotsSummary || null;
     state.notes = data.notes;
@@ -317,6 +343,7 @@ async function loadSettings() {
   $('#parallelImagesSelect').value = String(state.settings.parallelImages || 0);
   $('#parallelImagesSelect').options[0].textContent = `Auto (${state.settings.autoParallelImages})`;
   $('#duplicateModeSelect').value = normalizeDuplicateMode(state.settings.duplicateMode);
+  $('#resolutionSelect').value = state.settings.resolution || '1080';
   renderQualityDefaultsFields();
 }
 
@@ -353,7 +380,7 @@ function scheduleSettingsSave() {
 }
 
 async function saveSettings() {
-  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, duplicateMode: state.settings.duplicateMode, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
+  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, duplicateMode: state.settings.duplicateMode, resolution: state.settings.resolution, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
   state.settingsSave = state.settingsSave.catch(() => {}).then(() => api('/api/settings', {
     method: 'POST',
     body,
@@ -410,12 +437,92 @@ function selectedNamesForFolder(folder) {
 }
 
 function qualityTitle(folder) {
-  if (folder.selectedNotePath) {
-    const note = state.notes.find((candidate) => candidate.path === folder.selectedNotePath);
-    const name = note?.label || folder.selectedNotePath;
-    return `Quality for ${name}`;
+  const settings = folderConversion(folder);
+  return [...new Set(selectedNamesForFolder(folder).map((name) => compressionDescription(name, settings)))].join('\n\n');
+}
+
+function folderConversion(folder) {
+  return { format: els.formatSelect.value, effort: Number(els.effortSelect.value),
+    resolution: state.settings.resolution || '1080',
+    ...(state.encodingByNotePath.get(folder.selectedNotePath) || folder.encodingOverride || {}),
+    quality: qualityValue(folder), conflictPolicy: els.conflictSelect.value };
+}
+
+function setFolderEncodingGroup(folder, settings) {
+  if (folder.selectedNotePath) state.encodingByNotePath.set(folder.selectedNotePath, { ...state.encodingByNotePath.get(folder.selectedNotePath), ...settings });
+  else folder.encodingOverride = { ...folder.encodingOverride, ...settings };
+}
+
+function estimateKey(folder) {
+  return JSON.stringify([state.scanGeneration, folder.name, folderConversion(folder), duplicateModeForFolder(folder)]);
+}
+
+const estimateObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) state.estimateRows.add(entry.target);
+    else state.estimateRows.delete(entry.target);
   }
-  return 'Quality for this folder';
+  scheduleTableEstimates();
+}, { rootMargin: '120px 0px' });
+
+function observeEstimateRows() {
+  estimateObserver.disconnect();
+  state.estimateRows.clear();
+  stopTableEstimates();
+  for (const row of els.foldersBody.querySelectorAll('.folder-row')) {
+    updateEstimateRow(row);
+    estimateObserver.observe(row);
+  }
+}
+
+function stopTableEstimates() {
+  clearTimeout(state.estimateTimer);
+  state.estimateController?.abort();
+}
+
+function scheduleTableEstimates(delay = 550) {
+  clearTimeout(state.estimateTimer);
+  state.estimateTimer = setTimeout(runNextTableEstimate, delay);
+}
+
+function updateEstimateRow(row) {
+  const folder = state.visibleFolders[Number(row.dataset.index)];
+  if (!folder) return;
+  const entry = state.estimates.get(estimateKey(folder));
+  const label = row.querySelector('.folder-estimate');
+  const resolution = row.querySelector('.resolution-summary');
+  const settings = folderConversion(folder);
+  const copy = settings.format === 'original' && !selectedNamesForFolder(folder).some(isJxr);
+  row.querySelector('.row-resolution').disabled = copy;
+  if (copy) row.querySelector('.row-resolution').value = 'original';
+  label.textContent = entry?.data ? `≈ ${formatBytes(entry.data.estimatedBytes)}` : entry?.error ? 'Unavailable' : '≈ …';
+  label.title = entry?.error || (entry?.data ? `Estimated from ${formatUnit(entry.data.sampleCount, 'sample')} for ${formatUnit(entry.data.selectedCount, 'selected image')}. Actual output can differ.` : 'Estimated output size; calculated for visible folders only');
+  resolution.textContent = entry?.data ? `${entry.data.sourceDimensions.width} × ${entry.data.sourceDimensions.height}${entry.data.mixedDimensions ? '*' : ''}` : '…';
+  resolution.title = entry?.data ? `${entry.data.sourceDimensions.width} × ${entry.data.sourceDimensions.height} → ${entry.data.outputDimensions.width} × ${entry.data.outputDimensions.height}${entry.data.mixedDimensions ? '\nSampled dimensions differ; each image keeps its aspect ratio' : '\nBased on sampled images; preserve aspect ratio, never upscale'}` : 'Source resolution is detected from sampled images';
+}
+
+async function runNextTableEstimate() {
+  if (state.estimatePending || state.busy || !els.previewModal.hidden || $('#screenshotsPanel').hidden) return;
+  const row = [...state.estimateRows].find((candidate) => candidate.isConnected && !state.estimates.has(estimateKey(state.visibleFolders[Number(candidate.dataset.index)])));
+  if (!row) return;
+  const folder = state.visibleFolders[Number(row.dataset.index)];
+  const key = estimateKey(folder), generation = state.scanGeneration;
+  const controller = new AbortController();
+  state.estimateController = controller;
+  state.estimatePending = true;
+  row.querySelector('.folder-estimate').textContent = 'Estimating…';
+  try {
+    const data = await api('/api/estimate-folder', { method: 'POST', signal: controller.signal,
+      body: JSON.stringify({ folder: folder.name, conversion: folderConversion(folder), duplicateMode: duplicateModeForFolder(folder) }) });
+    if (generation === state.scanGeneration) state.estimates.set(key, { data });
+  } catch (error) {
+    if (error.name !== 'AbortError' && error.status !== 409 && generation === state.scanGeneration) state.estimates.set(key, { error: error.message });
+  } finally {
+    if (state.estimates.size > 256) state.estimates.delete(state.estimates.keys().next().value);
+    state.estimatePending = false;
+    for (const current of state.estimateRows) if (current.isConnected) updateEstimateRow(current);
+    scheduleTableEstimates(900);
+  }
 }
 
 function syncDefaultQuality() {
@@ -464,7 +571,8 @@ function renderFolderRows() {
   state.visibleFolders = sortFolders(state.folders, state.folderSort, state.notes);
   renderSelectionSummary();
   if (state.folders.length === 0) {
-    els.foldersBody.innerHTML = '<tr><td colspan="7" class="empty">No screenshot folders found</td></tr>';
+    els.foldersBody.innerHTML = '<tr><td colspan="8" class="empty">No screenshot folders found</td></tr>';
+    observeEstimateRows();
     return;
   }
 
@@ -480,18 +588,11 @@ function renderFolderRows() {
       </td>
       <td class="folder-cell">
         <div class="source-line">
-          <div class="source-name">${escapeHtml(folder.name)}</div>
-          <button class="icon-button preview-folder" type="button" title="Preview compression" aria-label="Preview compression">◐</button>
+          <div class="source-name" title="${escapeAttr(folder.name)}">${escapeHtml(folder.name)}</div>
+          <button class="icon-button preview-folder" type="button" title="Compression preview and JXR / PNG selection" aria-label="Preview compression">◐</button>
           <button class="icon-button open-source" type="button" title="Open source folder" aria-label="Open source folder"><span class="ui-icon icon-folder" aria-hidden="true"></span></button>
         </div>
         <div class="source-meta">${escapeHtml(formatFolderMeta(folder))}</div>
-        ${duplicatePairs(folder.images.map((image) => image.name)).length ? `
-          <div class="source-pair-options">
-            <select class="duplicate-mode" aria-label="JXR / PNG pairs for ${escapeAttr(folder.name)}" title="Same-name JXR / PNG pairs; all originals are archived">
-              ${['jxr', 'png', 'both'].map((mode) => `<option value="${mode}" ${mode === duplicateModeForFolder(folder) ? 'selected' : ''}>${mode === 'both' ? 'Both' : `${mode.toUpperCase()} only`}</option>`).join('')}
-            </select>
-            <span>${formatUnit(selectedNamesForFolder(folder).length, 'selected image')}</span>
-          </div>` : ''}
       </td>
       <td class="size-cell" data-label="Size">${escapeHtml(formatBytes(folder.totalBytes || 0))}</td>
       <td class="note-cell">
@@ -515,6 +616,13 @@ function renderFolderRows() {
       </td>
       <td class="quality-cell">
         <input class="row-quality-input" type="number" min="1" max="100" value="${escapeAttr(qualityValue(folder))}" aria-label="Quality for ${escapeAttr(folder.name)}" title="${escapeAttr(qualityTitle(folder))}">
+        <div class="folder-estimate cell-detail">≈ …</div>
+      </td>
+      <td class="resolution-cell">
+        <select class="row-resolution" aria-label="Resolution for ${escapeAttr(folder.name)}">
+          ${RESOLUTIONS.map((value) => `<option value="${value}" ${value === folderConversion(folder).resolution ? 'selected' : ''}>${value === 'original' ? 'Original' : value === '2160' ? '4K' : `${value}p`}</option>`).join('')}
+        </select>
+        <div class="resolution-summary cell-detail">…</div>
       </td>
       <td class="mode-cell">
         <select class="mode-select" title="${escapeAttr(folder.modeReason || 'Mode for this note')}">
@@ -553,14 +661,14 @@ function renderFolderRows() {
     });
     tr.querySelector('.open-source').addEventListener('click', () => openSourceFolder(folder.name));
     tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch(showFatal));
-    tr.querySelector('.duplicate-mode')?.addEventListener('change', (event) => {
-      folder.duplicateMode = normalizeDuplicateMode(event.target.value);
-      renderFolders();
-    });
     openNoteButton.addEventListener('click', () => openSelectedNote(folder));
     rowQualityInput.addEventListener('change', () => {
       const quality = clampQuality(rowQualityInput.value, defaultQuality());
       setQualityForFolderGroup(folder, quality);
+      renderFolders();
+    });
+    tr.querySelector('.row-resolution').addEventListener('change', (event) => {
+      setFolderEncodingGroup(folder, { resolution: event.target.value });
       renderFolders();
     });
     noteInput.addEventListener('focus', () => renderNoteMenu(noteMenu, noteInput, folder));
@@ -613,6 +721,7 @@ function renderFolderRows() {
     }
     els.foldersBody.append(tr);
   });
+  observeEstimateRows();
 }
 
 function updateFolderSelection() {
@@ -634,7 +743,7 @@ function formatFolderMeta(folder) {
   const parts = [
     formatUnit(folder.imageCount, 'file'),
   ];
-  if (folder.latestMtimeMs) parts.push(formatDate(folder.latestMtimeMs));
+  if (folder.modifiedMs || folder.latestMtimeMs) parts.push(formatDate(folder.modifiedMs || folder.latestMtimeMs));
   return parts.join(' · ');
 }
 
@@ -777,6 +886,7 @@ async function openItemArchive(runId, sourceFolderName) {
 }
 
 async function openPreviewModal(folder) {
+  stopTableEstimates();
   const sourceRequestId = ++state.preview.sourceRequestId;
   state.preview.conversionController?.abort();
   state.preview.suggestionController?.abort();
@@ -803,14 +913,20 @@ async function openPreviewModal(folder) {
   els.previewConvertedMeta.textContent = '';
   els.previewStatus.textContent = '';
   hideSuggestedQuality();
-  els.previewFormatSelect.value = els.formatSelect.value;
-  state.preview.standardFormat = els.formatSelect.value;
+  const settings = folderConversion(folder);
+  els.previewFormatSelect.value = settings.format;
+  state.preview.standardFormat = settings.format;
   els.previewFormatSelect.disabled = false;
   $('#previewCrf').textContent = '';
   $('#previewDuplicateModeSelect').value = duplicateModeForFolder(folder);
   $('#previewDuplicateField').hidden = !duplicatePairs(folder.images.map((image) => image.name)).length;
   els.previewQualityInput.value = qualityValue(folder);
-  els.previewEffortSelect.value = els.effortSelect.value;
+  els.previewEffortSelect.value = settings.effort;
+  $('#previewResolutionSelect').value = settings.resolution;
+  state.preview.estimate = null;
+  state.preview.estimateKey = '';
+  state.preview.actualSizes.clear();
+  $('#previewFolderEstimate').textContent = 'Estimated output: …';
   els.previewModal.hidden = false;
 
   const data = await api('/api/source-files', {
@@ -828,6 +944,8 @@ async function openPreviewModal(folder) {
 }
 
 function hidePreviewModal() {
+  state.preview.estimateController?.abort();
+  clearTimeout(state.preview.estimateTimer);
   state.preview.sourceRequestId += 1;
   state.preview.conversionController?.abort();
   state.preview.suggestionController?.abort();
@@ -836,21 +954,84 @@ function hidePreviewModal() {
   clearTimeout(state.preview.timer);
   clearTimeout(state.preview.suggestionTimer);
   els.previewModal.hidden = true;
+  scheduleTableEstimates();
 }
 
 function renderPreviewFileList() {
+  const scrollTop = els.previewFileList.scrollTop;
   const selected = state.preview.selectedFile?.name;
   const included = new Set(selectImageNames(state.preview.files.map((file) => file.name), $('#previewDuplicateModeSelect').value));
   els.previewFileList.innerHTML = state.preview.files.map((file) => `
     <button class="preview-file ${file.name === selected ? 'active' : ''} ${included.has(file.name) ? '' : 'excluded-file'}" type="button" data-file="${escapeAttr(file.name)}" title="${escapeAttr(file.name)}">
       <img src="${escapeAttr(file.thumbnailUrl || file.url)}" alt="" loading="lazy">
       <span>${escapeHtml(file.name)}</span>
-      <small>${escapeHtml(file.size)}${included.has(file.name) ? '' : ' · Skipped'}</small>
+      <small class="preview-file-size">${escapeHtml(previewFileSizeLabel(file, included.has(file.name)))}</small>
     </button>
   `).join('');
+  els.previewFileList.scrollTop = scrollTop;
   els.previewFileList.querySelectorAll('.preview-file').forEach((button) => {
     button.addEventListener('click', () => selectPreviewFile(button.dataset.file));
   });
+}
+
+function previewEstimateSettings() {
+  return { ...previewConversionSettings(), format: state.preview.standardFormat };
+}
+
+function previewActualKey(file) {
+  const settings = previewEstimateSettings();
+  return JSON.stringify([file.name, effectiveFormat(file.name, settings.format), settings.quality, settings.effort, settings.resolution]);
+}
+
+function previewFileSizeLabel(file, included) {
+  if (!included) return `${file.size} · Skipped`;
+  const actual = state.preview.actualSizes.get(previewActualKey(file));
+  const predicted = state.preview.estimate?.files.find((entry) => entry.name === file.name);
+  const bytes = actual ?? predicted?.estimatedBytes;
+  return `${file.size} → ${bytes == null ? '…' : `${actual != null || predicted?.exact ? '' : '≈ '}${formatBytes(bytes)}`}`;
+}
+
+function updatePreviewEstimates(error = '') {
+  const included = new Set(selectImageNames(state.preview.files.map((file) => file.name), $('#previewDuplicateModeSelect').value));
+  for (const button of els.previewFileList.querySelectorAll('.preview-file')) {
+    const file = state.preview.files.find((candidate) => candidate.name === button.dataset.file);
+    if (file) button.querySelector('.preview-file-size').textContent = previewFileSizeLabel(file, included.has(file.name));
+  }
+  const label = $('#previewFolderEstimate');
+  const data = state.preview.estimate;
+  let bytes = 0;
+  if (data) for (const file of state.preview.files) {
+    if (included.has(file.name)) bytes += state.preview.actualSizes.get(previewActualKey(file)) ?? data.files.find((entry) => entry.name === file.name)?.estimatedBytes ?? 0;
+  }
+  label.textContent = error ? 'Estimated output: unavailable' : `Estimated output: ${data ? `≈ ${formatBytes(bytes)}` : '…'} · ${formatUnit(included.size, 'selected image')}`;
+  label.title = error || (data ? `Based on ${formatUnit(data.sampleCount, 'sample')}; remaining file sizes are approximate` : 'Calculating from a small sample');
+}
+
+function schedulePreviewEstimate() {
+  if (els.previewModal.hidden || !state.preview.folder || !state.preview.files.length) return;
+  const settings = previewEstimateSettings();
+  const duplicateMode = $('#previewDuplicateModeSelect').value;
+  const key = JSON.stringify([state.preview.folder.name, settings, duplicateMode]);
+  if (state.preview.estimateKey === key) { updatePreviewEstimates(); return; }
+  state.preview.estimateKey = key;
+  state.preview.estimate = null;
+  state.preview.estimateController?.abort();
+  clearTimeout(state.preview.estimateTimer);
+  const controller = new AbortController();
+  state.preview.estimateController = controller;
+  updatePreviewEstimates();
+  const folder = state.preview.folder;
+  state.preview.estimateTimer = setTimeout(async () => {
+    try {
+      const data = await api('/api/estimate-folder', { method: 'POST', signal: controller.signal,
+        body: JSON.stringify({ folder: folder.name, conversion: settings, duplicateMode }) });
+      if (els.previewModal.hidden || state.preview.estimateKey !== key) return;
+      state.preview.estimate = data;
+      updatePreviewEstimates();
+    } catch (error) {
+      if (error.name !== 'AbortError' && state.preview.estimateKey === key) updatePreviewEstimates(error.message);
+    }
+  }, 650);
 }
 
 function selectPreviewFile(fileName) {
@@ -882,6 +1063,9 @@ function schedulePreviewConversion() {
   $('#previewCrf').textContent = avif ? `· CRF ${qualityToCrf(els.previewQualityInput.value)}` : '';
   $('#previewCrf').title = avif ? 'Quality 40 = CRF 16; lower CRF preserves more detail' : '';
   els.previewEffortSelect.disabled = els.previewFormatSelect.value !== 'webp';
+  $('#previewResolutionSelect').disabled = els.previewFormatSelect.value === 'original';
+  els.previewQualityInput.title = compressionDescription(state.preview.selectedFile?.name || '', previewConversionSettings());
+  schedulePreviewEstimate();
   state.preview.conversionController?.abort();
   clearTimeout(state.preview.timer);
   const requestId = state.preview.requestId + 1;
@@ -925,8 +1109,12 @@ async function runPreviewConversion(requestId) {
   els.previewConvertedCropImage.src = result.url;
   setPreviewLink(els.previewConvertedLink, result.url);
   setPreviewLink(els.previewConvertedCropLink, result.url);
-  els.previewConvertedMeta.textContent = `${result.conversion.format}${result.conversion.hdr ? ' HDR · 10-bit 4:4:4' : ''} · Q${result.conversion.quality}${result.conversion.crf != null ? ` · CRF ${result.conversion.crf}` : ''} · ${formatSizePair(result.sourceBytes, result.outputBytes)}`;
-  els.previewStatus.textContent = 'Preview only. Apply Quality to use this value in the table.';
+  els.previewConvertedMeta.textContent = `${result.conversion.format}${result.conversion.hdr ? ' HDR · 10-bit 4:4:4' : ''} · Q${result.conversion.quality}${result.conversion.crf != null ? ` · CRF ${result.conversion.crf}` : ''} · ${result.outputDimensions.width} × ${result.outputDimensions.height} · ${formatSizePair(result.sourceBytes, result.outputBytes)}`;
+  state.preview.actualSizes.set(previewActualKey(file), result.outputBytes);
+  renderPreviewFileList();
+  updatePreviewEstimates();
+  els.previewConvertedMeta.title = `${result.sourceDimensions.width} × ${result.sourceDimensions.height} → ${result.outputDimensions.width} × ${result.outputDimensions.height}`;
+  els.previewStatus.textContent = 'Preview only. Apply Settings to use these values in the table.';
 }
 
 function schedulePreviewSuggestion() {
@@ -1011,6 +1199,7 @@ function previewConversionSettings() {
     quality: clampQuality(els.previewQualityInput.value, defaultQuality()),
     effort: Number(els.previewEffortSelect.value),
     conflictPolicy: els.conflictSelect.value,
+    resolution: $('#previewResolutionSelect').value,
   };
 }
 
@@ -1019,9 +1208,10 @@ function applyPreviewQuality() {
   if (!folder) return;
   const quality = clampQuality(els.previewQualityInput.value, qualityValue(folder));
   setQualityForFolderGroup(folder, quality);
+  setFolderEncodingGroup(folder, { resolution: $('#previewResolutionSelect').value, format: state.preview.standardFormat, effort: Number(els.previewEffortSelect.value) });
   if (!$('#previewDuplicateField').hidden) folder.duplicateMode = normalizeDuplicateMode($('#previewDuplicateModeSelect').value);
   renderFolders();
-  setStatusText(`Quality ${quality} applied to matching note rows`);
+  setStatusText('Compression settings applied to matching note rows');
   hidePreviewModal();
 }
 
@@ -1109,6 +1299,9 @@ function collectPayload() {
       episode: folder.mode === 'episode' ? parseEpisodeNumber(folder.parsed.episode) : null,
       quality: qualityValue(folder),
       duplicateMode: duplicateModeForFolder(folder),
+      resolution: folderConversion(folder).resolution,
+      format: folderConversion(folder).format,
+      effort: folderConversion(folder).effort,
     }));
 
   return {
@@ -1617,6 +1810,10 @@ function setBusy(isBusy, text = '') {
 }
 
 function updateBusyControls() {
+  if (state.busy) {
+    stopTableEstimates();
+    state.preview.estimateController?.abort();
+  } else scheduleTableEstimates();
   els.scanButton.disabled = state.busy;
   els.runButton.disabled = state.busy;
   els.clearArchiveButton.disabled = state.busy || !state.archiveCanTrash;

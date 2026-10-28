@@ -16,6 +16,7 @@ export async function scanScreenshotFolders(config) {
     if (!entry.isDirectory()) continue;
     if (entry.name === config.archiveDirName || entry.name.startsWith('.')) continue;
     const folderPath = path.join(config.screenshotsRoot, entry.name);
+    const folderStat = await fs.stat(folderPath);
     const files = await fs.readdir(folderPath, { withFileTypes: true });
     const images = [];
     let totalBytes = 0;
@@ -47,11 +48,12 @@ export async function scanScreenshotFolders(config) {
       totalBytes,
       totalSize: formatBytes(totalBytes),
       latestMtimeMs,
+      modifiedMs: folderStat.mtimeMs,
       firstImage: images[0]?.name || null,
       images,
     });
   }
 
-  folders.sort((a, b) => b.latestMtimeMs - a.latestMtimeMs || naturalCompare(a.name, b.name));
+  folders.sort((a, b) => b.modifiedMs - a.modifiedMs || naturalCompare(a.name, b.name));
   return folders;
 }
