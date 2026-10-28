@@ -4,7 +4,7 @@ import { normalizeTheme } from '../public/theme.js';
 import { normalizeImageFolderTemplate } from './imageFolder.mjs';
 import { mediaNotePath } from './paths.mjs';
 import { normalizeDuplicateMode } from '../public/imageSelection.js';
-import { RESOLUTIONS } from '../public/conversionProfile.js';
+import { FORMATS, RESOLUTIONS } from '../public/conversionProfile.js';
 
 const DEFAULT_QUALITY_BY_MEDIA_DIR = {
   Anime: 50,
@@ -53,6 +53,7 @@ function normalizeAppSettings(config, input = {}) {
     qualityDefaults,
     parallelImages: normalizeParallelImages(input.parallelImages),
     duplicateMode: normalizeDuplicateMode(input.duplicateMode),
+    format: FORMATS.includes(input.format) ? input.format : 'webp',
     resolution: RESOLUTIONS.includes(String(input.resolution)) ? String(input.resolution) : '1080',
     theme: normalizeTheme(input.theme),
     imageFolderTemplate: normalizeImageFolderTemplate(input.imageFolderTemplate ?? config.attachmentsTemplate ?? 'All Notes/Attachments/{notename}'),

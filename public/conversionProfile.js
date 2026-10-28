@@ -1,6 +1,15 @@
 import { effectiveFormat, qualityToCrf } from './imageSelection.js';
 
 export const RESOLUTIONS = ['original', '720', '1080', '1440', '2160'];
+export const FORMATS = ['webp', 'jpg', 'png', 'avif', 'original'];
+
+export function resolutionLabel(value) {
+  return value === 'original' ? 'Original' : `${value === '2160' ? '4K' : `${value}p`} max`;
+}
+
+export function dimensionSummary(source, output) {
+  return `${source.width}x${source.height} → ${output.width}x${output.height}`;
+}
 
 export function normalizeResolution(value) {
   if (value == null || value === '') return '1080';

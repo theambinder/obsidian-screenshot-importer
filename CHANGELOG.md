@@ -4,6 +4,16 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.1 - 2026-10-28
+
+- Reduce note-suggestion pills and matching badges to 18px with consistent 11px text, removing inherited full-size button height and shortening table rows.
+- Show sampled source and output dimensions beneath Resolution, such as 3840x2160 → 1920x1080. Label resizing presets as maximum bounds in the table, Settings, and Compression Preview; preserve aspect ratio and never upscale.
+- Move estimated output size beneath the original value in Size.
+- Add a Format column with per-folder overrides inherited from the persisted Settings default, initially WebP. Keep JXR/PNG pair choices compact in this column and display the effective HDR AVIF format for JXR-only selections. Applying preview settings keeps Format and paired-source selection local to that folder; Quality/Resolution/Effort remain linked by Note.
+- Open source directories by clicking their names and remove the separate folder-open icon. Adapt the expanded controls and pixel captions for narrow windows.
+- Add regression tests for maximum-resolution labels and pixel captions, format-default persistence, and independent formats for folders sharing one Note through import and rollback.
+- Verify all 129 automated tests against the rebuilt portable bundle, compact controls in native WKWebView, per-folder preview settings, paired-source switching, default persistence, and responsive layouts from 320 to 1920 pixels using disposable fixtures.
+
 ## 1.7.0 - 2026-10-28
 
 - Match Finder's default Date Modified order using the source directory's own modification time, newest first. Show the same date beneath Folder; keep the newest-image timestamp separately for diagnostics. Reset sort returns to folder Date Modified order.

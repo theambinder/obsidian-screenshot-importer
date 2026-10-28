@@ -4,7 +4,7 @@ import { parseSeasonNumber, parseEpisodeNumber, hasEpisodeNumbers, findDuplicate
 import { createTabScroll } from './tabScroll.js';
 import { createUpdates } from './updates.js';
 import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualityToCrf, effectiveFormat } from './imageSelection.js';
-import { RESOLUTIONS, compressionDescription } from './conversionProfile.js';
+import { FORMATS, RESOLUTIONS, compressionDescription, resolutionLabel, dimensionSummary } from './conversionProfile.js';
 
 const state = {
   config: null,
@@ -151,7 +151,12 @@ $('#duplicateModeSelect').addEventListener('change', (event) => {
 });
 $('#previewDuplicateModeSelect').addEventListener('change', () => { renderPreviewFileList(); schedulePreviewEstimate(); });
 $('#previewResolutionSelect').addEventListener('change', handlePreviewEncoderChange);
-for (const control of [els.formatSelect, els.effortSelect]) control.addEventListener('change', renderFolders);
+els.effortSelect.addEventListener('change', renderFolders);
+els.formatSelect.addEventListener('change', () => {
+  state.settings.format = els.formatSelect.value;
+  renderFolders();
+  scheduleSettingsSave();
+});
 $('#resolutionSelect').addEventListener('change', (event) => {
   state.settings.resolution = event.target.value;
   renderFolders();
@@ -344,6 +349,7 @@ async function loadSettings() {
   $('#parallelImagesSelect').options[0].textContent = `Auto (${state.settings.autoParallelImages})`;
   $('#duplicateModeSelect').value = normalizeDuplicateMode(state.settings.duplicateMode);
   $('#resolutionSelect').value = state.settings.resolution || '1080';
+  els.formatSelect.value = state.settings.format || 'webp';
   renderQualityDefaultsFields();
 }
 
@@ -380,7 +386,7 @@ function scheduleSettingsSave() {
 }
 
 async function saveSettings() {
-  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, duplicateMode: state.settings.duplicateMode, resolution: state.settings.resolution, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
+  const body = JSON.stringify({ qualityDefaults: state.settings.qualityDefaults || {}, parallelImages: state.settings.parallelImages || 0, duplicateMode: state.settings.duplicateMode, format: state.settings.format, resolution: state.settings.resolution, theme: normalizeTheme(state.settings.theme), imageFolderTemplate: state.settings.imageFolderTemplate, noteModes: state.settings.noteModes || {} });
   state.settingsSave = state.settingsSave.catch(() => {}).then(() => api('/api/settings', {
     method: 'POST',
     body,
@@ -442,9 +448,10 @@ function qualityTitle(folder) {
 }
 
 function folderConversion(folder) {
-  return { format: els.formatSelect.value, effort: Number(els.effortSelect.value),
+  return { effort: Number(els.effortSelect.value),
     resolution: state.settings.resolution || '1080',
     ...(state.encodingByNotePath.get(folder.selectedNotePath) || folder.encodingOverride || {}),
+    format: folder.formatOverride || els.formatSelect.value,
     quality: qualityValue(folder), conflictPolicy: els.conflictSelect.value };
 }
 
@@ -497,7 +504,7 @@ function updateEstimateRow(row) {
   if (copy) row.querySelector('.row-resolution').value = 'original';
   label.textContent = entry?.data ? `≈ ${formatBytes(entry.data.estimatedBytes)}` : entry?.error ? 'Unavailable' : '≈ …';
   label.title = entry?.error || (entry?.data ? `Estimated from ${formatUnit(entry.data.sampleCount, 'sample')} for ${formatUnit(entry.data.selectedCount, 'selected image')}. Actual output can differ.` : 'Estimated output size; calculated for visible folders only');
-  resolution.textContent = entry?.data ? `${entry.data.sourceDimensions.width} × ${entry.data.sourceDimensions.height}${entry.data.mixedDimensions ? '*' : ''}` : '…';
+  resolution.textContent = entry?.data ? `${dimensionSummary(entry.data.sourceDimensions, entry.data.outputDimensions)}${entry.data.mixedDimensions ? '*' : ''}` : '…';
   resolution.title = entry?.data ? `${entry.data.sourceDimensions.width} × ${entry.data.sourceDimensions.height} → ${entry.data.outputDimensions.width} × ${entry.data.outputDimensions.height}${entry.data.mixedDimensions ? '\nSampled dimensions differ; each image keeps its aspect ratio' : '\nBased on sampled images; preserve aspect ratio, never upscale'}` : 'Source resolution is detected from sampled images';
 }
 
@@ -571,7 +578,7 @@ function renderFolderRows() {
   state.visibleFolders = sortFolders(state.folders, state.folderSort, state.notes);
   renderSelectionSummary();
   if (state.folders.length === 0) {
-    els.foldersBody.innerHTML = '<tr><td colspan="8" class="empty">No screenshot folders found</td></tr>';
+    els.foldersBody.innerHTML = '<tr><td colspan="9" class="empty">No screenshot folders found</td></tr>';
     observeEstimateRows();
     return;
   }
@@ -579,6 +586,10 @@ function renderFolderRows() {
   els.foldersBody.innerHTML = '';
   state.visibleFolders.forEach((folder, index) => {
     const isEpisodeMode = folder.mode === 'episode';
+    const conversion = folderConversion(folder);
+    const selectedNames = selectedNamesForFolder(folder);
+    const hdrOnly = selectedNames.length > 0 && selectedNames.every(isJxr);
+    const hasPairs = duplicatePairs((folder.images || []).map((image) => image.name)).length > 0;
     const tr = document.createElement('tr');
     tr.className = 'folder-row';
     tr.dataset.index = String(index);
@@ -588,13 +599,15 @@ function renderFolderRows() {
       </td>
       <td class="folder-cell">
         <div class="source-line">
-          <div class="source-name" title="${escapeAttr(folder.name)}">${escapeHtml(folder.name)}</div>
-          <button class="icon-button preview-folder" type="button" title="Compression preview and JXR / PNG selection" aria-label="Preview compression">◐</button>
-          <button class="icon-button open-source" type="button" title="Open source folder" aria-label="Open source folder"><span class="ui-icon icon-folder" aria-hidden="true"></span></button>
+          <button class="source-name" type="button" title="${escapeAttr(folder.name)}" aria-label="Open source folder: ${escapeAttr(folder.name)}">${escapeHtml(folder.name)}</button>
+          <button class="icon-button preview-folder" type="button" title="Compression preview" aria-label="Preview compression">◐</button>
         </div>
         <div class="source-meta">${escapeHtml(formatFolderMeta(folder))}</div>
       </td>
-      <td class="size-cell" data-label="Size">${escapeHtml(formatBytes(folder.totalBytes || 0))}</td>
+      <td class="size-cell" data-label="Size">
+        <span>${escapeHtml(formatBytes(folder.totalBytes || 0))}</span>
+        <div class="folder-estimate cell-detail">≈ …</div>
+      </td>
       <td class="note-cell">
         <div class="note-picker">
           <div class="note-control">
@@ -614,13 +627,20 @@ function renderFolderRows() {
           </div>
         </div>
       </td>
+      <td class="format-cell">
+        <select class="row-format" aria-label="Format for ${escapeAttr(folder.name)}" title="${hdrOnly ? 'JXR always uses HDR AVIF' : 'Output format for this folder; JXR always uses HDR AVIF'}" ${hdrOnly ? 'disabled' : ''}>
+          ${FORMATS.map((value) => `<option value="${value}" ${value === (hdrOnly ? 'avif' : conversion.format) ? 'selected' : ''}>${value}</option>`).join('')}
+        </select>
+        ${hasPairs ? `<select class="row-duplicate-mode" aria-label="JXR / PNG pairs for ${escapeAttr(folder.name)}" title="Which paired originals to convert; all originals are archived">
+          ${[['jxr', 'JXR only'], ['png', 'PNG only'], ['both', 'Both']].map(([value, label]) => `<option value="${value}" ${value === duplicateModeForFolder(folder) ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>` : ''}
+      </td>
       <td class="quality-cell">
         <input class="row-quality-input" type="number" min="1" max="100" value="${escapeAttr(qualityValue(folder))}" aria-label="Quality for ${escapeAttr(folder.name)}" title="${escapeAttr(qualityTitle(folder))}">
-        <div class="folder-estimate cell-detail">≈ …</div>
       </td>
       <td class="resolution-cell">
         <select class="row-resolution" aria-label="Resolution for ${escapeAttr(folder.name)}">
-          ${RESOLUTIONS.map((value) => `<option value="${value}" ${value === folderConversion(folder).resolution ? 'selected' : ''}>${value === 'original' ? 'Original' : value === '2160' ? '4K' : `${value}p`}</option>`).join('')}
+          ${RESOLUTIONS.map((value) => `<option value="${value}" ${value === conversion.resolution ? 'selected' : ''}>${resolutionLabel(value)}</option>`).join('')}
         </select>
         <div class="resolution-summary cell-detail">…</div>
       </td>
@@ -659,7 +679,7 @@ function renderFolderRows() {
       setNoteFoldersEnabled(state.folders, folder, groupEnabled);
       updateFolderSelection();
     });
-    tr.querySelector('.open-source').addEventListener('click', () => openSourceFolder(folder.name));
+    tr.querySelector('.source-name').addEventListener('click', () => openSourceFolder(folder.name));
     tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch(showFatal));
     openNoteButton.addEventListener('click', () => openSelectedNote(folder));
     rowQualityInput.addEventListener('change', () => {
@@ -669,6 +689,14 @@ function renderFolderRows() {
     });
     tr.querySelector('.row-resolution').addEventListener('change', (event) => {
       setFolderEncodingGroup(folder, { resolution: event.target.value });
+      renderFolders();
+    });
+    tr.querySelector('.row-format').addEventListener('change', (event) => {
+      folder.formatOverride = event.target.value;
+      renderFolders();
+    });
+    tr.querySelector('.row-duplicate-mode')?.addEventListener('change', (event) => {
+      folder.duplicateMode = normalizeDuplicateMode(event.target.value);
       renderFolders();
     });
     noteInput.addEventListener('focus', () => renderNoteMenu(noteMenu, noteInput, folder));
@@ -1208,10 +1236,11 @@ function applyPreviewQuality() {
   if (!folder) return;
   const quality = clampQuality(els.previewQualityInput.value, qualityValue(folder));
   setQualityForFolderGroup(folder, quality);
-  setFolderEncodingGroup(folder, { resolution: $('#previewResolutionSelect').value, format: state.preview.standardFormat, effort: Number(els.previewEffortSelect.value) });
+  setFolderEncodingGroup(folder, { resolution: $('#previewResolutionSelect').value, effort: Number(els.previewEffortSelect.value) });
+  folder.formatOverride = state.preview.standardFormat;
   if (!$('#previewDuplicateField').hidden) folder.duplicateMode = normalizeDuplicateMode($('#previewDuplicateModeSelect').value);
   renderFolders();
-  setStatusText('Compression settings applied to matching note rows');
+  setStatusText('Compression settings applied');
   hidePreviewModal();
 }
 

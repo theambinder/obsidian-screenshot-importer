@@ -71,6 +71,7 @@
               <col class="col-source">
               <col class="col-size">
               <col class="col-note">
+              <col class="col-format">
               <col class="col-quality">
               <col class="col-resolution">
               <col class="col-mode">
@@ -82,6 +83,7 @@
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="source" data-sort-label="Folder">Folder <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="size" data-sort-label="Size">Size <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                 <th aria-sort="none"><button class="sort-button" type="button" data-sort-key="note" data-sort-label="Note">Note <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                <th><span class="column-label">Format</span></th>
                 <th><span class="column-label">Quality</span></th>
                 <th><span class="column-label">Resolution</span></th>
                 <th><span class="column-label">Mode</span></th>
@@ -90,7 +92,7 @@
             </thead>
             <tbody id="foldersBody">
               <tr>
-                <td colspan="8" class="empty">Scanning...</td>
+                <td colspan="9" class="empty">Scanning...</td>
               </tr>
             </tbody>
           </table>
@@ -191,10 +193,10 @@
                 Default Resolution
                 <select id="resolutionSelect" aria-label="Default Resolution">
                   <option value="original">Original</option>
-                  <option value="720">720p</option>
-                  <option value="1080" selected>1080p</option>
-                  <option value="1440">1440p</option>
-                  <option value="2160">4K</option>
+                  <option value="720">720p max</option>
+                  <option value="1080" selected>1080p max</option>
+                  <option value="1440">1440p max</option>
+                  <option value="2160">4K max</option>
                 </select>
               </label>
             </div>
@@ -297,10 +299,10 @@
             Resolution
             <select id="previewResolutionSelect" aria-label="Preview Resolution">
               <option value="original">Original</option>
-              <option value="720">720p</option>
-              <option value="1080">1080p</option>
-              <option value="1440">1440p</option>
-              <option value="2160">4K</option>
+              <option value="720">720p max</option>
+              <option value="1080">1080p max</option>
+              <option value="1440">1440p max</option>
+              <option value="2160">4K max</option>
             </select>
           </label>
           <button id="applyPreviewQualityButton" class="primary" type="button">Apply Settings</button>

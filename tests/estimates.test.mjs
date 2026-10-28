@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { targetDimensions, normalizeResolution, compressionDescription } from '../public/conversionProfile.js';
+import { FORMATS, RESOLUTIONS, targetDimensions, normalizeResolution, compressionDescription, resolutionLabel, dimensionSummary } from '../public/conversionProfile.js';
 import { CompressionEstimator, estimateSamples } from '../src/compressionEstimate.mjs';
 import { imageInfo } from '../src/imageInfo.mjs';
 import { convertImage } from '../src/converter.mjs';
@@ -68,6 +68,42 @@ test('1080p is the default while explicitly saved Original and smaller presets a
   assert.equal((await loadAppSettings(f.config)).resolution, 'original');
   await saveAppSettings(f.config, { resolution: '720' });
   assert.equal((await loadAppSettings(f.config)).resolution, '720');
+});
+
+test('resolution labels communicate a maximum and captions show both exact pixel dimensions', () => {
+  assert.deepEqual(RESOLUTIONS.map(resolutionLabel), ['Original', '720p max', '1080p max', '1440p max', '4K max']);
+  const source = { width: 3140, height: 2200 };
+  assert.equal(dimensionSummary(source, targetDimensions(source)), '3140x2200 → 1541x1080');
+  const small = { width: 640, height: 360 };
+  assert.equal(dimensionSummary(small, targetDimensions(small)), '640x360 → 640x360');
+});
+
+test('the Settings format defaults to WebP, persists all supported formats, and survives unrelated saves', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await loadAppSettings(f.config)).format, 'webp');
+  for (const format of FORMATS) {
+    await saveAppSettings(f.config, { format });
+    await saveAppSettings(f.config, { resolution: '720' });
+    assert.equal((await loadAppSettings(f.config)).format, format);
+  }
+  await saveAppSettings(f.config, { format: 'unsupported' });
+  assert.equal((await loadAppSettings(f.config)).format, 'webp');
+});
+
+test('folders sharing a note keep independent output formats through import and rollback', async (t) => {
+  const f = await fixture(t);
+  const second = path.join(f.config.screenshotsRoot, 'Show E2');
+  await fs.mkdir(second);
+  for (const directory of [f.source, second]) await fs.copyFile(path.join(root, 'tests/fixtures/hdr-1080.png'), path.join(directory, 'capture.png'));
+  const job = new ImportJob(f.config, { items: [{ ...f.item, format: 'png' }, { ...f.item, sourceFolderName: 'Show E2', episode: 2, format: 'webp' }], conversion: { format: 'jpg' } });
+  await job.run();
+  assert.equal(job.status, 'done', JSON.stringify(job.results));
+  assert.deepEqual(job.log.items.map((item) => item.conversion.format), ['png', 'webp']);
+  assert.deepEqual(job.log.generatedFiles.map((name) => path.extname(name)), ['.png', '.webp']);
+  for (const name of job.log.generatedFiles) assert.deepEqual(await imageInfo(path.join(f.config.vaultRoot, name)), { width: 1280, height: 720 });
+  assert.equal((await rollbackRun(f.config, job.id)).status, 'done');
+  assert.equal(await pathExists(path.join(second, 'capture.png')), true);
+  assert.equal(await pathExists(path.join(f.source, 'capture.png')), true);
 });
 
 test('default scan order uses directory Date Modified, not the newest image date', async (t) => {

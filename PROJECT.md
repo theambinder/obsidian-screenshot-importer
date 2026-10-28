@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.7.0**. The authoritative version is `package.json`.
+Current version: **1.7.1**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -81,8 +81,9 @@ optional 720/1080/1440/2160 presets fit a 16:9 box, rotated for portrait images,
 preserving aspect ratio and never upscaling. WebP uses cwebp resizing, other encoders
 use Lanczos scaling. HDR resampling happens in the linear-to-PQ zimg pipeline. Copy
 mode ignores resizing for SDR inputs. `resolution` is captured in per-folder journals.
-The table shows sampled source width/height in pixels rather than classifying arbitrary
-images as 4K/1080p. Output dimensions are in its tooltip and converted preview.
+The table shows sampled source and output width/height in pixels beneath Resolution,
+for example `3840x2160 → 1920x1080`, rather than classifying arbitrary images as 4K/1080p.
+Resolution presets explicitly say max; Original is not a resizing preset.
 For example, 3140×2200 fits to 1541×1080; smaller originals are unchanged.
 ImageIO reports display-oriented dimensions for EXIF-rotated photos. WebP conversion
 normalizes EXIF orientation before resizing, avoiding a raw/display dimension mismatch.
@@ -122,8 +123,14 @@ Preview has a thumbnail file list with total count/size, stacked original/conver
 images, central detail crops, output size, and isolated temporary encoder settings.
 Clicking an image opens a separate native image window. Apply Quality propagates
 the chosen quality to the note group and closes the dialog. Since 1.7.0 this command
-is Apply Settings and includes format, effort, and resolution overrides, retained per
-Note during the session. Suggested quality is
+is Apply Settings and includes effort and resolution overrides, retained per
+Note during the session. Since 1.7.1, format and paired-source choices apply only to
+the previewed folder. The table's Format column inherits the persisted Settings
+default (WebP initially); an explicit row override lasts until the next scan and
+does not affect other folders sharing the Note. JXR-only selections display locked
+AVIF, without overwriting the preferred SDR format when switching to PNG or Both.
+Compact pair selectors appear only for actual JXR/PNG pairs in the Format column.
+Suggested quality is
 the knee of a tested file-size curve, not a perceptual-quality guarantee; visual
 inspection remains necessary. Preview files are temporary and never enter history.
 
@@ -147,6 +154,12 @@ cancel outstanding estimates. Approximate sizes carry an approximation marker;
 sampled source/output dimensions can flag mixed dimensions. No estimate writes to
 the source folder, vault, history, or settings. Native `image-info` uses ImageIO
 metadata without pixel caching; JXR --info avoids floating-point decoding.
+
+Table estimates sit below original Size. Note suggestions and matching badges use
+11px text in explicit 18px-high pills, independent of the standard button height.
+Folder names are keyboard-accessible buttons that open the source directory;
+the former separate folder icon is removed. Responsive rows retain every control
+without horizontal overflow, including Format and full dimension captions.
 
 Scan order and the displayed Date Modified use directory mtime, matching Finder,
 not the newest contained image. The latter remains `latestMtimeMs` for source

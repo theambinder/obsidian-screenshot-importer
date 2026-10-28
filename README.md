@@ -49,6 +49,8 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 - Convert HDR JXR captures to 10-bit 4:4:4 PQ AVIF. Select JXR only (default), PNG only,
   or Both for same-name pairs; archive and restore all originals, including unconverted counterparts.
 - Set category defaults and per-note quality; convert batches in parallel.
+- Override output Format for individual folders, with compact JXR/PNG pair choices
+  beside the format. Click a folder name to open its source directory.
 - Insert Obsidian embeds into the correct work or episode section and place images
   in the configurable **Settings > Image Folder** (default `All Notes/Attachments/{notename}/`).
 - Review run summaries, compression savings, and archived sources. Roll back a
@@ -95,18 +97,19 @@ and can be resized even when the regular-image default is Original.
 
 1080p is a maximum fitting box, not a forced aspect ratio: 3140×2200 becomes
 approximately 1541×1080, while 1280×720 stays unchanged. The table shows sampled
-source dimensions in pixels below Resolution; its tooltip and the converted preview
-show the exact output dimensions. No cropping or stretching is applied. Original
+source and output dimensions in pixels below Resolution, for example
+`3840x2160 → 1920x1080`. Preset labels include **max**. No cropping or stretching is applied. Original
 keeps full dimensions when explicitly selected. Existing saved resolution choices
 are retained.
 
-Output sizes marked **≈** are estimates based on at most two actual sample encodes
+Output sizes marked **≈** beneath the original **Size** are estimates based on at most two actual sample encodes
 per folder/settings combination, not guarantees. Only visible folders are processed
 in the background, one estimate at a time. Results and samples are cached, and
 background estimation stops during import, rollback, Trash, or shutdown. Preview
 shows folder/image estimates and exact sizes for already converted samples. Apply
-Settings applies the preview's quality, format, effort, and resolution to matching
-Note rows; paired-source selection remains per folder. Estimates describe selected
+Settings applies quality, effort, and resolution to matching Note rows; format and
+paired-source selection remain per folder. **Settings > Default Format** is persisted
+and inherited by rows without a format override. Estimates describe selected
 outputs, whereas archive totals include all originals, including omitted counterparts.
 
 ## HDR Captures and Paired Originals
@@ -118,7 +121,7 @@ Compression Preview shows the actual CRF, HDR reference, converted image, and fi
 Category quality defaults and per-note overrides are retained; HDR does not reset them.
 
 **Settings > JXR / PNG Pairs** sets the default for files sharing a basename in the
-same folder. Compression Preview can override it for an individual folder. The choice
+same folder. The **Format** column and Compression Preview can override it for an individual folder. The choice
 affects paired files only, not unrelated or unpaired images. With **Both** and AVIF output,
 the PNG counterpart uses `.sdr.avif` to avoid overwriting the HDR `.avif`.
 
