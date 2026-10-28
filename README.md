@@ -49,9 +49,8 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
 - Convert HDR JXR captures to 10-bit 4:4:4 PQ AVIF. Select JXR only (default), PNG only,
   or Both for same-name pairs; archive and restore all originals, including unconverted counterparts.
 - Set category defaults and per-note quality; convert batches in parallel.
-- Override output Format for individual folders, with compact JXR/PNG pair choices
-  beside the format. The copy icon applies the displayed Format to all folders with
-  the exact same Note. Click a folder name to open its source directory.
+- Change Format, Quality, or Resolution for all folders with the exact same Note.
+  JXR/PNG pair choices remain individual. Click a folder name to open its source directory.
 - Insert Obsidian embeds into the correct work or episode section and place images
   in the configurable **Settings > Image Folder** (default `All Notes/Attachments/{notename}/`).
 - Review run summaries, compression savings, and archived sources. Roll back a
@@ -112,8 +111,8 @@ per folder/settings combination, not guarantees. Only visible folders are proces
 in the background, one estimate at a time. Results and samples are cached, and
 background estimation stops during import, rollback, Trash, or shutdown. Preview
 shows folder/image estimates and exact sizes for already converted samples. Apply
-Settings applies quality, effort, and resolution to matching Note rows; format and
-paired-source selection remain per folder. **Settings > Default Format** is persisted
+Settings applies format, quality, effort, and resolution to matching Note rows;
+paired-source selection remains per folder. **Settings > Default Format** is persisted
 and inherited by rows without a format override. Estimates describe selected
 outputs, whereas archive totals include all originals, including omitted counterparts.
 
@@ -129,6 +128,22 @@ for review. A bare number before a technical bracket, such as `Example Show 23
 
 The completed Run report provides an Obsidian button for each folder, targeting its
 work or episode heading. **Open History** expands and scrolls to that specific Run.
+All Obsidian buttons open a new tab instead of replacing the active note, using the
+official [`paneType=tab` URI parameter](https://obsidian.md/help/uri).
+
+## Large Compression Previews
+
+The file list loads 256px thumbnails near the visible area, not complete originals.
+The comparison uses lossless PNG display images capped at 1600px and separate center
+detail crops. Source and converted crops cover the same area even when output is
+resized. Clicking either image still opens the complete original or encoded result.
+Displayed sizes and estimates describe the actual encoded output, not the display proxy.
+
+Image rendering and speculative encoding run in a cancellable, prioritized queue.
+Switching files cancels obsolete conversion/analysis; closing releases image loads
+and decoded-image URLs. The list is retained during selection changes. Automatic
+quality analysis starts after the primary preview, reuses cached results, and stops
+when the existing size-curve criterion is met. HDR proxies remain 16-bit PQ/BT.2020.
 
 ## HDR Captures and Paired Originals
 

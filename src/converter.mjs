@@ -60,12 +60,18 @@ function hdrInputArgs(decoded) {
 
 // Lossless 16-bit PQ reference for viewers that cannot decode the original JXR.
 export async function renderJxrReference(inputPath, outputPath, options = {}) {
-  return withConversionSource(inputPath, (decoded) => runCommand('ffmpeg', [
+  return withConversionSource(inputPath, (decoded) => {
+    const view = options.view || (options.thumbnail ? 'thumbnail' : 'original');
+    const limit = view === 'thumbnail' ? 256 : view === 'overview' ? 1600 : null;
+    const scale = limit ? Math.min(1, limit / Math.max(decoded.width, decoded.height)) : 1;
+    const crop = Math.min(512, decoded.width, decoded.height);
+    return runCommand('ffmpeg', [
     '-hide_banner', '-loglevel', 'error', '-y', ...hdrInputArgs(decoded), '-frames:v', '1',
-    '-vf', `${HDR_TRANSFORM}:m=gbr${options.thumbnail ? ':w=256:h=-1' : ''},format=gbrp16le,format=rgb48be`,
+    '-filter_threads', '1', '-vf', `${view === 'crop' ? `crop=${crop}:${crop}:floor((iw-ow)/2):floor((ih-oh)/2),` : ''}${HDR_TRANSFORM}:m=gbr${limit ? `:w=${Math.max(1, Math.round(decoded.width * scale))}:h=${Math.max(1, Math.round(decoded.height * scale))}` : ''},format=gbrp16le,format=rgb48be`,
     '-color_primaries', 'bt2020', '-color_trc', 'smpte2084', '-colorspace', 'rgb', '-color_range', 'pc',
-    '-compression_level', '6', outputPath,
-  ], options), options);
+    '-threads', '1', '-compression_level', view === 'original' ? '6' : '1', outputPath,
+  ], options);
+  }, options);
 }
 
 function clampNumber(value, min, max, fallback) {

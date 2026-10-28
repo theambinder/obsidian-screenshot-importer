@@ -8,7 +8,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const withDuplicates = process.argv.includes('--duplicates');
 const withNavigation = process.argv.includes('--navigation');
 const withHdr = process.argv.includes('--hdr');
-const fixtureName = withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
+const withHeavy = process.argv.includes('--heavy');
+const fixtureName = withHeavy ? 'desktop-heavy-fixture' : withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
 const root = path.join(projectRoot, 'build', fixtureName);
 const locations = {
   screenshotsRoot: path.join(root, 'Screenshots'),
@@ -65,6 +66,21 @@ if (withHdr) {
     await fs.copyFile(path.join(projectRoot, `tests/fixtures/hdr-1080.${extension}`), path.join(hdrFolder, `capture.${extension}`));
   }
   await fs.writeFile(path.join(locations.dataDir, 'settings.json'), JSON.stringify({ qualityDefaults: { Games: 40 } }));
+}
+if (withHeavy) {
+  await fs.mkdir(path.join(locations.mediaRoot, 'Games'), { recursive: true });
+  await fs.writeFile(path.join(locations.mediaRoot, 'Games/Large PNG Test.md'), '# Large PNG Test\n');
+  const large = path.join(locations.screenshotsRoot, 'Large PNG Test');
+  await fs.mkdir(large, { recursive: true });
+  const sample = path.join(large, 'image-000.png');
+  await runCommand('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i',
+    'testsrc2=size=3840x2160:rate=1,noise=alls=100:allf=u', '-frames:v', '1', '-pix_fmt', 'rgb48be', '-compression_level', '1', sample]);
+  for (let index = 1; index < 127; index++) {
+    const destination = path.join(large, `image-${String(index).padStart(3, '0')}.png`);
+    try { await fs.link(sample, destination); } catch (error) {
+      if (error.code !== 'EEXIST') await fs.copyFile(sample, destination, fs.constants.COPYFILE_FICLONE);
+    }
+  }
 }
 await fs.writeFile(path.join(root, 'locations.json'), JSON.stringify(locations, null, 2));
 console.log(root);

@@ -16,19 +16,20 @@ export class PreviewCache {
   }
 
   remove(id) {
-    this.bytes -= this.entries.get(id)?.data.length || 0;
+    this.bytes -= this.entries.get(id)?.bytes || 0;
     this.entries.delete(id);
   }
 
-  put(data, mimeType) {
-    if (data.length > this.maxBytes) throw new Error('Preview exceeds the cache size limit');
+  put(data, mimeType, variants = {}) {
+    const bytes = data.length + Object.values(variants).reduce((sum, variant) => sum + variant.data.length, 0);
+    if (bytes > this.maxBytes) throw new Error('Preview exceeds the cache size limit');
     this.prune();
-    while (this.entries.size >= this.maxEntries || this.bytes + data.length > this.maxBytes) {
+    while (this.entries.size >= this.maxEntries || this.bytes + bytes > this.maxBytes) {
       this.remove(this.entries.keys().next().value);
     }
     const id = randomUUID();
-    this.entries.set(id, { data, mimeType, expiresAt: Date.now() + this.ttlMs });
-    this.bytes += data.length;
+    this.entries.set(id, { data, mimeType, variants, bytes, expiresAt: Date.now() + this.ttlMs });
+    this.bytes += bytes;
     return `/api/preview-image/${id}`;
   }
 

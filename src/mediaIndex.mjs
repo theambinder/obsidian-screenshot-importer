@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { listFilesRecursive, normalizeText, stripMdExtension, toPosixPath, vaultRelative } from './utils.mjs';
+import { listFilesRecursive, normalizeText, stripMdExtension, toPosixPath, vaultRelative, obsidianOpenUri } from './utils.mjs';
 
 function parseFrontmatter(content) {
   if (!content.startsWith('---')) return {};
@@ -95,7 +95,7 @@ export async function scanMedia(config) {
         searchNames,
         normalizedNames: searchNames.map(normalizeText),
         aliases: searchNames.filter((name) => name !== noteName),
-        obsidianUri: `obsidian://open?path=${encodeURIComponent(filePath)}`,
+        obsidianUri: obsidianOpenUri(filePath),
       });
     }
   }

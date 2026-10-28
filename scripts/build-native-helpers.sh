@@ -12,3 +12,7 @@ TEMP="$(mktemp "$ROOT/build/bin/.image-info.XXXXXX")"
 /usr/bin/clang -std=c11 -Wall -Wextra -Werror -O2 -mmacosx-version-min=13.5 \
   "$ROOT/macos/image-info.c" -o "$TEMP" -framework ImageIO -framework CoreFoundation
 mv "$TEMP" "$ROOT/build/bin/image-info"
+TEMP="$(mktemp "$ROOT/build/bin/.image-preview.XXXXXX")"
+/usr/bin/clang -std=c11 -Wall -Wextra -Werror -O2 -mmacosx-version-min=13.5 \
+  "$ROOT/macos/image-preview.c" -o "$TEMP" -framework ImageIO -framework CoreFoundation -framework CoreGraphics
+mv "$TEMP" "$ROOT/build/bin/image-preview"

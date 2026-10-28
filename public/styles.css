@@ -402,9 +402,7 @@ th {
   width: auto;
 }
 
-.col-format { width: 122px; }
-.format-control { display: grid; grid-template-columns: minmax(0, 1fr) 24px; gap: 4px; }
-.format-control .icon-button { width: 24px; min-width: 24px; }
+.col-format { width: 96px; }
 .row-format { width: 100%; }
 .row-duplicate-mode {
   display: block;
@@ -605,7 +603,6 @@ select:focus-visible {
 .icon-folder { --icon: url('/icons/folder.svg'); }
 .icon-undo { --icon: url('/icons/undo-2.svg'); }
 .icon-refresh { --icon: url('/icons/refresh-cw.svg'); }
-.icon-copy { --icon: url('/icons/copy.svg'); }
 
 .brand-icon {
   display: block;
@@ -1204,7 +1201,6 @@ select:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(2.25);
 }
 
 .preview-image-box,
@@ -1480,11 +1476,11 @@ a:hover {
   tr.folder-row .format-cell {
     grid-column: 2;
     grid-row: 4;
-    width: 114px;
+    width: 88px;
   }
 
-  tr.folder-row .quality-cell { grid-column: 2; grid-row: 4; width: 70px; margin-left: 122px; }
-  tr.folder-row .resolution-cell { grid-column: 2; grid-row: 4; width: 174px; margin-left: 200px; }
+  tr.folder-row .quality-cell { grid-column: 2; grid-row: 4; width: 70px; margin-left: 96px; }
+  tr.folder-row .resolution-cell { grid-column: 2; grid-row: 4; width: 174px; margin-left: 174px; }
   tr.folder-row .format-cell::before { content: 'Format'; }
   tr.folder-row .quality-cell::before { content: 'Quality'; }
   tr.folder-row .resolution-cell::before { content: 'Resolution'; }
@@ -1500,14 +1496,14 @@ a:hover {
     grid-column: 2;
     grid-row: 4;
     width: 104px;
-    margin-left: 382px;
+    margin-left: 356px;
   }
 
   tr.folder-row .episode-cell {
     grid-column: 2;
     grid-row: 4;
     width: 98px;
-    margin-left: 494px;
+    margin-left: 468px;
   }
 
   .mode-select {

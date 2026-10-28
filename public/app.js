@@ -7,6 +7,8 @@ import { isJxr, duplicatePairs, selectImageNames, normalizeDuplicateMode, qualit
 import { FORMATS, RESOLUTIONS, compressionDescription, resolutionLabel, dimensionSummary } from './conversionProfile.js';
 import { formatBytes } from './formatBytes.js';
 import { noteModeInfo } from './mediaMode.js';
+import { createPreviewImageLoader } from './previewImages.js';
+import { newTabNoteUri } from './obsidianUri.js';
 
 const state = {
   config: null,
@@ -43,6 +45,9 @@ const state = {
   preview: {
     folder: null,
     files: [],
+    filesByName: new Map(),
+    estimateByName: new Map(),
+    sourceController: null,
     selectedFile: null,
     requestId: 0,
     suggestionRequestId: 0,
@@ -117,6 +122,18 @@ const els = {
   applyPreviewQualityButton: $('#applyPreviewQualityButton'),
 };
 
+const previewImages = createPreviewImageLoader();
+const previewThumbnails = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting && !els.previewModal.hidden) previewImages.load(entry.target, entry.target.dataset.url);
+    else previewImages.clear(entry.target);
+  }
+}, { root: els.previewFileList, rootMargin: '100px' });
+els.previewFileList.addEventListener('click', (event) => {
+  const button = event.target.closest('.preview-file');
+  if (button) selectPreviewFile(button.dataset.file);
+});
+
 const tabScroll = createTabScroll({
   initialTab: 'screenshots',
   readScroll: () => window.scrollY,
@@ -153,7 +170,7 @@ $('#duplicateModeSelect').addEventListener('change', (event) => {
   renderFolders();
   scheduleSettingsSave();
 });
-$('#previewDuplicateModeSelect').addEventListener('change', () => { renderPreviewFileList(); schedulePreviewEstimate(); });
+$('#previewDuplicateModeSelect').addEventListener('change', () => { updatePreviewEstimates(); schedulePreviewEstimate(); });
 $('#previewResolutionSelect').addEventListener('change', handlePreviewEncoderChange);
 els.effortSelect.addEventListener('change', renderFolders);
 els.formatSelect.addEventListener('change', () => {
@@ -461,13 +478,20 @@ function folderConversion(folder) {
   return { effort: Number(els.effortSelect.value),
     resolution: state.settings.resolution || '1080',
     ...(state.encodingByNotePath.get(folder.selectedNotePath) || folder.encodingOverride || {}),
-    format: folder.formatOverride || els.formatSelect.value,
+    format: state.encodingByNotePath.get(folder.selectedNotePath)?.format || folder.formatOverride || els.formatSelect.value,
     quality: qualityValue(folder), conflictPolicy: els.conflictSelect.value };
 }
 
 function setFolderEncodingGroup(folder, settings) {
   if (folder.selectedNotePath) state.encodingByNotePath.set(folder.selectedNotePath, { ...state.encodingByNotePath.get(folder.selectedNotePath), ...settings });
   else folder.encodingOverride = { ...folder.encodingOverride, ...settings };
+}
+
+function setFormatForFolderGroup(folder, format) {
+  if (folder.selectedNotePath) {
+    setFolderEncodingGroup(folder, { format });
+    setNoteFoldersFormat(state.folders, folder, format);
+  } else folder.formatOverride = format;
 }
 
 function estimateKey(folder) {
@@ -638,12 +662,9 @@ function renderFolderRows() {
         </div>
       </td>
       <td class="format-cell">
-        <div class="format-control">
-        <select class="row-format" aria-label="Format for ${escapeAttr(folder.name)}" title="${hdrOnly ? 'JXR always uses HDR AVIF' : 'Output format for this folder; JXR always uses HDR AVIF'}" ${hdrOnly ? 'disabled' : ''}>
+        <select class="row-format" aria-label="Format for ${escapeAttr(folder.name)}" title="${hdrOnly ? 'JXR always uses HDR AVIF' : `Output format for ${folder.selectedNotePath ? 'all folders with this Note' : 'this folder'}; JXR always uses HDR AVIF`}" ${hdrOnly ? 'disabled' : ''}>
           ${FORMATS.map((value) => `<option value="${value}" ${value === (hdrOnly ? 'avif' : conversion.format) ? 'selected' : ''}>${value}</option>`).join('')}
         </select>
-        <button class="icon-button apply-note-format" type="button" title="Apply Format to all folders with this Note" aria-label="Apply Format to all folders with this Note: ${escapeAttr(folder.name)}" ${folder.selectedNotePath ? '' : 'disabled'}><span class="ui-icon icon-copy" aria-hidden="true"></span></button>
-        </div>
         ${hasPairs ? `<select class="row-duplicate-mode" aria-label="JXR / PNG pairs for ${escapeAttr(folder.name)}" title="Which paired originals to convert; all originals are archived">
           ${[['jxr', 'JXR only'], ['png', 'PNG only'], ['both', 'Both']].map(([value, label]) => `<option value="${value}" ${value === duplicateModeForFolder(folder) ? 'selected' : ''}>${label}</option>`).join('')}
         </select>` : ''}
@@ -693,7 +714,7 @@ function renderFolderRows() {
       updateFolderSelection();
     });
     tr.querySelector('.source-name').addEventListener('click', () => openSourceFolder(folder.name));
-    tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch(showFatal));
+    tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch((error) => { if (error.name !== 'AbortError') showFatal(error); }));
     openNoteButton.addEventListener('click', () => openSelectedNote(folder));
     rowQualityInput.addEventListener('change', () => {
       const quality = clampQuality(rowQualityInput.value, defaultQuality());
@@ -705,13 +726,8 @@ function renderFolderRows() {
       renderFolders();
     });
     tr.querySelector('.row-format').addEventListener('change', (event) => {
-      folder.formatOverride = event.target.value;
+      setFormatForFolderGroup(folder, event.target.value);
       renderFolders();
-    });
-    tr.querySelector('.apply-note-format').addEventListener('click', () => {
-      const count = setNoteFoldersFormat(state.folders, folder, tr.querySelector('.row-format').value);
-      renderFolders();
-      setStatusText(`Format applied to ${formatUnit(count, 'folder')}`);
     });
     tr.querySelector('.row-duplicate-mode')?.addEventListener('change', (event) => {
       folder.duplicateMode = normalizeDuplicateMode(event.target.value);
@@ -898,7 +914,7 @@ async function rememberManualRule(folder) {
 
 function openSelectedNote(folder) {
   const note = state.notes.find((candidate) => candidate.path === folder.selectedNotePath);
-  if (note) window.location.href = note.obsidianUri;
+  if (note) window.location.href = newTabNoteUri(note.obsidianUri);
 }
 
 async function openSourceFolder(folderName) {
@@ -939,11 +955,16 @@ async function openItemArchive(runId, sourceFolderName) {
 
 async function openPreviewModal(folder) {
   stopTableEstimates();
+  cancelPreviewWork();
+  previewThumbnails.disconnect();
+  previewImages.clearAll();
   const sourceRequestId = ++state.preview.sourceRequestId;
   state.preview.conversionController?.abort();
   state.preview.suggestionController?.abort();
   state.preview.folder = folder;
   state.preview.files = [];
+  state.preview.filesByName.clear();
+  state.preview.estimateByName.clear();
   state.preview.selectedFile = null;
   state.preview.suggestedQuality = null;
   state.preview.requestId += 1;
@@ -981,31 +1002,49 @@ async function openPreviewModal(folder) {
   $('#previewFolderEstimate').textContent = 'Estimated output: …';
   els.previewModal.hidden = false;
 
+  const controller = new AbortController();
+  state.preview.sourceController = controller;
   const data = await api('/api/source-files', {
     method: 'POST',
+    signal: controller.signal,
     body: JSON.stringify({ folder: folder.name }),
   });
   if (sourceRequestId !== state.preview.sourceRequestId || els.previewModal.hidden) return;
   state.preview.files = data.files || [];
+  state.preview.filesByName = new Map(state.preview.files.map((file) => [file.name, file]));
   els.previewFolderTitle.textContent = `${folder.name} · ${formatUnit(state.preview.files.length, 'file')} · ${formatBytes(sumBytes(state.preview.files))}`;
   if (!state.preview.files.length) {
     els.previewFileList.innerHTML = '<div class="empty">No image files found</div>';
     return;
   }
+  renderPreviewFileList();
   selectPreviewFile(state.preview.files[0].name);
 }
 
-function hidePreviewModal() {
+function cancelPreviewWork() {
   state.preview.estimateController?.abort();
   clearTimeout(state.preview.estimateTimer);
   state.preview.sourceRequestId += 1;
+  state.preview.sourceController?.abort();
   state.preview.conversionController?.abort();
   state.preview.suggestionController?.abort();
   state.preview.requestId += 1;
   state.preview.suggestionRequestId += 1;
   clearTimeout(state.preview.timer);
   clearTimeout(state.preview.suggestionTimer);
+}
+
+function hidePreviewModal() {
   els.previewModal.hidden = true;
+  cancelPreviewWork();
+  previewThumbnails.disconnect();
+  previewImages.clearAll();
+  els.previewFileList.replaceChildren();
+  state.preview.files = [];
+  state.preview.filesByName.clear();
+  state.preview.estimateByName.clear();
+  state.preview.folder = null;
+  state.preview.selectedFile = null;
   scheduleTableEstimates();
 }
 
@@ -1015,15 +1054,13 @@ function renderPreviewFileList() {
   const included = new Set(selectImageNames(state.preview.files.map((file) => file.name), $('#previewDuplicateModeSelect').value));
   els.previewFileList.innerHTML = state.preview.files.map((file) => `
     <button class="preview-file ${file.name === selected ? 'active' : ''} ${included.has(file.name) ? '' : 'excluded-file'}" type="button" data-file="${escapeAttr(file.name)}" title="${escapeAttr(file.name)}">
-      <img src="${escapeAttr(file.thumbnailUrl || file.url)}" alt="" loading="lazy">
+      <img data-url="${escapeAttr(file.thumbnailUrl)}" alt="" decoding="async" width="56" height="40">
       <span>${escapeHtml(file.name)}</span>
       <small class="preview-file-size">${escapeHtml(previewFileSizeLabel(file, included.has(file.name)))}</small>
     </button>
   `).join('');
   els.previewFileList.scrollTop = scrollTop;
-  els.previewFileList.querySelectorAll('.preview-file').forEach((button) => {
-    button.addEventListener('click', () => selectPreviewFile(button.dataset.file));
-  });
+  for (const image of els.previewFileList.querySelectorAll('img')) previewThumbnails.observe(image);
 }
 
 function previewEstimateSettings() {
@@ -1038,7 +1075,7 @@ function previewActualKey(file) {
 function previewFileSizeLabel(file, included) {
   if (!included) return `${file.size} · Skipped`;
   const actual = state.preview.actualSizes.get(previewActualKey(file));
-  const predicted = state.preview.estimate?.files.find((entry) => entry.name === file.name);
+  const predicted = state.preview.estimateByName.get(file.name);
   const bytes = actual ?? predicted?.estimatedBytes;
   return `${file.size} → ${bytes == null ? '…' : `${actual != null || predicted?.exact ? '' : '≈ '}${formatBytes(bytes)}`}`;
 }
@@ -1046,14 +1083,16 @@ function previewFileSizeLabel(file, included) {
 function updatePreviewEstimates(error = '') {
   const included = new Set(selectImageNames(state.preview.files.map((file) => file.name), $('#previewDuplicateModeSelect').value));
   for (const button of els.previewFileList.querySelectorAll('.preview-file')) {
-    const file = state.preview.files.find((candidate) => candidate.name === button.dataset.file);
+    const file = state.preview.filesByName.get(button.dataset.file);
+    button.classList.toggle('active', file?.name === state.preview.selectedFile?.name);
+    button.classList.toggle('excluded-file', !included.has(button.dataset.file));
     if (file) button.querySelector('.preview-file-size').textContent = previewFileSizeLabel(file, included.has(file.name));
   }
   const label = $('#previewFolderEstimate');
   const data = state.preview.estimate;
   let bytes = 0;
   if (data) for (const file of state.preview.files) {
-    if (included.has(file.name)) bytes += state.preview.actualSizes.get(previewActualKey(file)) ?? data.files.find((entry) => entry.name === file.name)?.estimatedBytes ?? 0;
+    if (included.has(file.name)) bytes += state.preview.actualSizes.get(previewActualKey(file)) ?? state.preview.estimateByName.get(file.name)?.estimatedBytes ?? 0;
   }
   label.textContent = error ? 'Estimated output: unavailable' : `Estimated output: ${data ? `≈ ${formatBytes(bytes)}` : '…'} · ${formatUnit(included.size, 'selected image')}`;
   label.title = error || (data ? `Based on ${formatUnit(data.sampleCount, 'sample')}; remaining file sizes are approximate` : 'Calculating from a small sample');
@@ -1064,9 +1103,10 @@ function schedulePreviewEstimate() {
   const settings = previewEstimateSettings();
   const duplicateMode = $('#previewDuplicateModeSelect').value;
   const key = JSON.stringify([state.preview.folder.name, settings, duplicateMode]);
-  if (state.preview.estimateKey === key) { updatePreviewEstimates(); return; }
+  if (state.preview.estimateKey === key && state.preview.estimate) { updatePreviewEstimates(); return; }
   state.preview.estimateKey = key;
   state.preview.estimate = null;
+  state.preview.estimateByName.clear();
   state.preview.estimateController?.abort();
   clearTimeout(state.preview.estimateTimer);
   const controller = new AbortController();
@@ -1079,6 +1119,7 @@ function schedulePreviewEstimate() {
         body: JSON.stringify({ folder: folder.name, conversion: settings, duplicateMode }) });
       if (els.previewModal.hidden || state.preview.estimateKey !== key) return;
       state.preview.estimate = data;
+      state.preview.estimateByName = new Map(data.files.map((file) => [file.name, file]));
       updatePreviewEstimates();
     } catch (error) {
       if (error.name !== 'AbortError' && state.preview.estimateKey === key) updatePreviewEstimates(error.message);
@@ -1087,16 +1128,18 @@ function schedulePreviewEstimate() {
 }
 
 function selectPreviewFile(fileName) {
-  const file = state.preview.files.find((candidate) => candidate.name === fileName);
+  const file = state.preview.filesByName.get(fileName);
   if (!file) return;
+  cancelPreviewWork();
+  for (const image of [els.previewOriginalImage, els.previewOriginalCropImage, els.previewConvertedImage, els.previewConvertedCropImage]) previewImages.clear(image);
   state.preview.selectedFile = file;
   els.previewFormatSelect.disabled = isJxr(file.name);
   els.previewFormatSelect.value = isJxr(file.name) ? 'avif' : state.preview.standardFormat;
   els.previewFormatSelect.title = isJxr(file.name) ? 'JXR output is always HDR AVIF' : '';
   state.preview.suggestedQuality = null;
-  renderPreviewFileList();
-  els.previewOriginalImage.src = file.url;
-  els.previewOriginalCropImage.src = file.url;
+  updatePreviewEstimates();
+  previewImages.load(els.previewOriginalImage, file.displayUrl);
+  previewImages.load(els.previewOriginalCropImage, file.cropUrl);
   setPreviewLink(els.previewOriginalLink, file.url);
   setPreviewLink(els.previewOriginalCropLink, file.url);
   els.previewOriginalMeta.textContent = `${file.name} · ${file.size}${file.hdr ? ' · HDR reference' : ''}`;
@@ -1107,7 +1150,6 @@ function selectPreviewFile(fileName) {
   els.previewConvertedMeta.textContent = '';
   hideSuggestedQuality();
   schedulePreviewConversion();
-  schedulePreviewSuggestion();
 }
 
 function schedulePreviewConversion() {
@@ -1117,7 +1159,12 @@ function schedulePreviewConversion() {
   els.previewEffortSelect.disabled = els.previewFormatSelect.value !== 'webp';
   $('#previewResolutionSelect').disabled = els.previewFormatSelect.value === 'original';
   els.previewQualityInput.title = compressionDescription(state.preview.selectedFile?.name || '', previewConversionSettings());
-  schedulePreviewEstimate();
+  state.preview.estimateController?.abort();
+  state.preview.suggestionController?.abort();
+  clearTimeout(state.preview.estimateTimer);
+  clearTimeout(state.preview.suggestionTimer);
+  state.preview.suggestionRequestId += 1;
+  hideSuggestedQuality();
   state.preview.conversionController?.abort();
   clearTimeout(state.preview.timer);
   const requestId = state.preview.requestId + 1;
@@ -1132,7 +1179,6 @@ function schedulePreviewConversion() {
 function handlePreviewEncoderChange(event) {
   if (event?.target === els.previewFormatSelect) state.preview.standardFormat = els.previewFormatSelect.value;
   schedulePreviewConversion();
-  schedulePreviewSuggestion();
 }
 
 async function runPreviewConversion(requestId) {
@@ -1157,16 +1203,17 @@ async function runPreviewConversion(requestId) {
   });
   if (requestId !== state.preview.requestId || els.previewModal.hidden) return;
 
-  els.previewConvertedImage.src = result.url;
-  els.previewConvertedCropImage.src = result.url;
+  previewImages.load(els.previewConvertedImage, result.displayUrl);
+  previewImages.load(els.previewConvertedCropImage, result.cropUrl);
   setPreviewLink(els.previewConvertedLink, result.url);
   setPreviewLink(els.previewConvertedCropLink, result.url);
   els.previewConvertedMeta.textContent = `${result.conversion.format}${result.conversion.hdr ? ' HDR · 10-bit 4:4:4' : ''} · Q${result.conversion.quality}${result.conversion.crf != null ? ` · CRF ${result.conversion.crf}` : ''} · ${result.outputDimensions.width} × ${result.outputDimensions.height} · ${formatSizePair(result.sourceBytes, result.outputBytes)}`;
   state.preview.actualSizes.set(previewActualKey(file), result.outputBytes);
-  renderPreviewFileList();
   updatePreviewEstimates();
   els.previewConvertedMeta.title = `${result.sourceDimensions.width} × ${result.sourceDimensions.height} → ${result.outputDimensions.width} × ${result.outputDimensions.height}`;
   els.previewStatus.textContent = 'Preview only. Apply Settings to use these values in the table.';
+  schedulePreviewEstimate();
+  schedulePreviewSuggestion();
 }
 
 function schedulePreviewSuggestion() {
@@ -1179,7 +1226,7 @@ function schedulePreviewSuggestion() {
     runPreviewSuggestion(requestId).catch((error) => {
       if (error.name !== 'AbortError' && requestId === state.preview.suggestionRequestId) hideSuggestedQuality(error.message);
     });
-  }, 350);
+  }, 1500);
 }
 
 async function runPreviewSuggestion(requestId) {
@@ -1261,7 +1308,7 @@ function applyPreviewQuality() {
   const quality = clampQuality(els.previewQualityInput.value, qualityValue(folder));
   setQualityForFolderGroup(folder, quality);
   setFolderEncodingGroup(folder, { resolution: $('#previewResolutionSelect').value, effort: Number(els.previewEffortSelect.value) });
-  folder.formatOverride = state.preview.standardFormat;
+  setFormatForFolderGroup(folder, state.preview.standardFormat);
   if (!$('#previewDuplicateField').hidden) folder.duplicateMode = normalizeDuplicateMode($('#previewDuplicateModeSelect').value);
   renderFolders();
   setStatusText('Compression settings applied');
@@ -1501,7 +1548,7 @@ function showDoneModal(results, runId) {
   `;
   els.doneModalBody.querySelectorAll('.open-result-note').forEach((button) => {
     button.addEventListener('click', () => {
-      if (button.dataset.noteUri) window.location.href = button.dataset.noteUri;
+      if (button.dataset.noteUri) window.location.href = newTabNoteUri(button.dataset.noteUri);
     });
   });
   els.doneModal.hidden = false;
@@ -1674,7 +1721,7 @@ function renderRuns(data) {
     card.querySelectorAll('.open-history-note').forEach((button) => {
       button.addEventListener('click', () => {
         const noteUri = button.dataset.noteUri;
-        if (noteUri) window.location.href = noteUri;
+        if (noteUri) window.location.href = newTabNoteUri(noteUri);
       });
     });
     card.querySelectorAll('.open-item-archive').forEach((button) => {

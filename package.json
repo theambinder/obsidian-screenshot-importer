@@ -1,6 +1,6 @@
 {
   "name": "obsidian-screenshot-importer",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "private": true,
   "type": "module",
   "description": "Map image folders to Obsidian notes, then batch-import with compression, episode organization, and rollback.",

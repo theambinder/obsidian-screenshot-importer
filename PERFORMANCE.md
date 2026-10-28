@@ -74,6 +74,35 @@ the pixels sent to the encoder and can reduce encoding time, but input reading a
 JXR decoding still occur at original resolution. No speedup or file-size percentage
 is guaranteed. Original/copy SDR output is not resized or re-encoded.
 
+## Responsive Previews: 1.7.3
+
+The previous file list loaded full ordinary images for thumbnails and recreated
+the list after every selection/conversion. A large folder could trigger many
+full-size PNG decodes in WebKit while conversion, estimates, and Auto Quality ran
+at the same time. These costs are now separated from interactive UI rendering.
+
+The native renderer produces 256px thumbnails and 1600px overview PNGs; separate
+center crops retain local detail and match the resized output's field of view.
+An IntersectionObserver loads only visible/nearby list images, list nodes survive
+selection changes, and close/switch abort requests and queued encoding. Preview
+work is serialized with foreground priority; automatic size-curve searches are
+delayed, cached, and terminate once the existing elbow criterion is satisfied.
+Display proxies never change import settings, output bytes, or full-image links.
+
+Disposable test: 127 synthetic noisy 3840x2160 16-bit PNGs, each 27,345,439 bytes;
+logical folder total 3.47 GB. Hard links avoid duplicating this generated test data.
+One thumbnail was 194,476 bytes (256x144), versus the 27.3 MB source. Only 15 of 127
+list thumbnails were loaded near the viewport. The selected overview was 8,219,557
+bytes (1600x900) and its unscaled source detail crop was 901,069 bytes (512x512).
+PNG display copies preserve color information; random noise is deliberately hard
+to compress. A browser close plus visibility assertion took 265 ms while a newly
+selected image's conversion was pending; native switch/close observations were
+under one second, including accessibility capture latency. These local timings
+are not universal guarantees or a claim about import encoding speed.
+
+Reproduce with `node tests/create-desktop-fixture.mjs --heavy` and the resulting
+disposable profile. Real source folders, notes, and history were not mutated.
+
 ## Safety and Reproduction
 
 Only image encoding is parallel. A bounded batch is fully drained before ordered publication; failures and early exits clean scratch files. `increment`, `reuse`, `skip`, and `overwrite` resolve their names at serial commit time, including duplicate basenames such as `a.jpg` and `a.png`. Original/copy mode avoids staging overhead. Completed mutations retain the existing checkpoints, backups, hashes, sorted episode insertion, and rollback behavior.

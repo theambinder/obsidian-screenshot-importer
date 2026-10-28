@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.7.2**. The authoritative version is `package.json`.
+Current version: **1.7.3**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -131,15 +131,14 @@ images, central detail crops, output size, and isolated temporary encoder settin
 Clicking an image opens a separate native image window. Apply Quality propagates
 the chosen quality to the note group and closes the dialog. Since 1.7.0 this command
 is Apply Settings and includes effort and resolution overrides, retained per
-Note during the session. Since 1.7.1, format and paired-source choices apply only to
-the previewed folder. The table's Format column inherits the persisted Settings
-default (WebP initially); an explicit row override lasts until the next scan and
-does not affect other folders sharing the Note. JXR-only selections display locked
+Note during the session. Format now follows the same automatic exact-Note grouping
+as Quality; edits in the table or Apply Settings propagate to every matching folder.
+The table inherits the persisted Settings default (WebP initially) until a session
+Note override exists. Unmatched folders remain independent. Paired-source choices
+remain per-folder. JXR-only selections display locked
 AVIF, without overwriting the preferred SDR format when switching to PNG or Both.
 Compact pair selectors appear only for actual JXR/PNG pairs in the Format column.
-Since 1.7.2, an explicit copy-icon action applies the displayed Format to every
-folder with the exact same nonempty Note path. A normal selector change remains
-per-folder. The action leaves Quality, Resolution, and paired-source policy alone.
+The separate Format copy action introduced in 1.7.2 is removed in 1.7.3.
 Suggested quality is
 the knee of a tested file-size curve, not a perceptual-quality guarantee; visual
 inspection remains necessary. Preview files are temporary and never enter history.
@@ -151,6 +150,29 @@ bounded preview cache. AVIF suggestions reuse one floating-point decode across
 candidates. HDR folder batches use at most two encoders to bound memory. Actual
 HDR display depends on WebKit, OS, viewer, and display capability; a reference is
 not a guarantee of HDR presentation on every supported Mac.
+
+From 1.7.3, inline previews never load full source images as thumbnails. A native
+ImageIO helper renders oriented, color-managed PNG thumbnails (maximum 256px),
+overview images (maximum 1600px), and unscaled center crops (maximum 512px). The
+converted crop is reduced proportionally to output resizing so the compared field
+of view matches. The bundled FFmpeg is a fallback for unsupported ImageIO formats;
+HDR derivatives explicitly retain 16-bit BT.2020/PQ tags. Actual encoding, dimensions,
+and byte counts remain based on complete originals. Full-image links do not use blobs.
+
+`src/previewWork.mjs` serializes CPU-heavy preview rendering, conversion, estimates,
+and quality searches; foreground work has higher priority. Response disconnects
+abort tasks; import/update/shutdown cancel queued and active work. Source proxies
+use a separate version-keyed 64 MiB / 256-entry LRU cache, so thumbnails cannot evict
+converted full-image links. Converted cache accounting includes its display variants.
+Full SDR source links stream bytes instead of buffering complete originals in Node.
+
+The browser observes visible list thumbnails, keeps file-list nodes between
+selections, and releases offscreen image requests. All display fetches are abortable;
+closing clears image elements, aborts requests/timers, and revokes object URLs.
+File/estimate lookups use Maps rather than repeated linear searches. Auto Quality
+starts after the foreground conversion, waits for an idle interval, caches curves,
+and can finish as soon as the same existing elbow criterion is reached. The optional
+native heavy fixture contains 127 synthetic noisy 4K PNGs, not private screenshots.
 
 `src/compressionEstimate.mjs` encodes at most two representative selected images:
 one per input/encoding group where possible, otherwise the first and middle image.
@@ -183,6 +205,9 @@ heading-specific URI (or a note-index fallback for failed items). The report kee
 its originating Run ID. Open History explicitly expands that Run and scrolls it
 below the sticky headers, without changing ordinary section scroll restoration.
 History disclosure triangles use 23px glyphs inside the existing compact buttons.
+Every Obsidian URI uses the official `paneType=tab` parameter
+(https://obsidian.md/help/uri). A frontend adapter also upgrades older journal links
+without rewriting history or losing encoded heading/path values.
 
 Scan order and the displayed Date Modified use directory mtime, matching Finder,
 not the newest contained image. The latter remains `latestMtimeMs` for source

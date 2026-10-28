@@ -220,7 +220,7 @@ export function makeRunId(date = new Date()) {
 
 export function obsidianOpenUri(absolutePath, heading = '') {
   const withHeading = heading ? `${absolutePath}#${heading}` : absolutePath;
-  return `obsidian://open?path=${encodeURIComponent(withHeading)}`;
+  return `obsidian://open?path=${encodeURIComponent(withHeading)}&paneType=tab`;
 }
 
 export function escapeHtml(value) {

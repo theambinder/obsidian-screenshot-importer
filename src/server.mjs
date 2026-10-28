@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import http from 'node:http';
 import os from 'node:os';
@@ -19,6 +21,8 @@ import { RollbackJob } from './rollbackJob.mjs';
 import { convertImage, conversionForImage, withConversionSource } from './converter.mjs';
 import { PreviewCache } from './previewCache.mjs';
 import { HdrReferenceCache } from './hdrReference.mjs';
+import { PreviewWorkQueue } from './previewWork.mjs';
+import { PreviewImages, PREVIEW_VIEWS, renderPreviewImage } from './previewImages.mjs';
 import { isJxr } from '../public/imageSelection.js';
 import { CompressionEstimator } from './compressionEstimate.mjs';
 import { imageInfo } from './imageInfo.mjs';
@@ -31,7 +35,10 @@ const publicRoot = path.resolve(__dirname, '../public');
 export function createAppServer(config = resolveConfig(), { updater = null } = {}) {
 const jobs = new Map();
 const previews = new PreviewCache();
-const hdrReferences = new HdrReferenceCache(previews);
+const hdrReferences = new HdrReferenceCache(new PreviewCache());
+const previewWork = new PreviewWorkQueue();
+const previewImages = new PreviewImages(previewWork);
+const qualitySuggestions = new Map();
 const estimator = new CompressionEstimator();
 let mutationActive = false;
 let activeJobId = null;
@@ -66,6 +73,9 @@ async function readBody(req) {
 }
 
 async function handleApi(req, res, url) {
+  if (['/api/preview-conversion', '/api/preview-quality-suggestion'].includes(url.pathname) && (mutationActive || stopping)) {
+    throw Object.assign(new Error('Previews are paused during an operation'), { status: 409 });
+  }
   if (url.pathname === '/api/updates/state' && req.method === 'GET') {
     sendJson(res, { supported: Boolean(updater), ...updater?.state });
     return;
@@ -336,6 +346,7 @@ async function handleApi(req, res, url) {
     const entries = await fs.readdir(folderPath, { withFileTypes: true });
     const files = [];
     for (const entry of entries) {
+      if (res.destroyed) return;
       if (!entry.isFile()) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (!IMAGE_EXTENSIONS.has(ext)) continue;
@@ -347,7 +358,9 @@ async function handleApi(req, res, url) {
         size: formatBytes(stat.size),
         mtimeMs: stat.mtimeMs,
         url: sourceImageUrl(payload.folder || '', entry.name),
-        thumbnailUrl: `${sourceImageUrl(payload.folder || '', entry.name)}${isJxr(entry.name) ? '&thumbnail=1' : ''}`,
+        thumbnailUrl: `${sourceImageUrl(payload.folder || '', entry.name)}&view=thumbnail&v=${stat.mtimeMs}-${stat.size}`,
+        displayUrl: `${sourceImageUrl(payload.folder || '', entry.name)}&view=overview&v=${stat.mtimeMs}-${stat.size}`,
+        cropUrl: `${sourceImageUrl(payload.folder || '', entry.name)}&view=crop&v=${stat.mtimeMs}-${stat.size}`,
         hdr: isJxr(entry.name),
       });
     }
@@ -356,8 +369,9 @@ async function handleApi(req, res, url) {
       const controller = new AbortController();
       const abort = () => { if (!res.writableEnded) controller.abort(); };
       res.once('close', abort);
+      if (res.destroyed) controller.abort();
       try {
-        sendJson(res, await estimator.estimate(folderPath, files, payload.conversion || {}, payload.duplicateMode, { signal: controller.signal }));
+        sendJson(res, await previewWork.run((signal) => estimator.estimate(folderPath, files, payload.conversion || {}, payload.duplicateMode, { signal }), { signal: controller.signal, priority: -10 }));
       } finally { res.off('close', abort); }
       return;
     }
@@ -381,27 +395,32 @@ async function handleApi(req, res, url) {
     const controller = new AbortController();
     const abort = () => { if (!res.writableEnded) controller.abort(); };
     res.once('close', abort);
+    if (res.destroyed) controller.abort();
     try {
-      await convertImage(inputPath, outputPath, conversion, { signal: controller.signal });
-      const [inputStat, outputStat] = await Promise.all([
-        fs.stat(inputPath),
-        fs.stat(outputPath),
-      ]);
-      const outputData = await fs.readFile(outputPath);
-      const sourceDimensions = await imageInfo(inputPath, { signal: controller.signal });
-      estimator.remember(inputPath, inputStat, conversion, outputStat.size, sourceDimensions);
-      sendJson(res, {
-        folder: payload.folder || '',
-        file: payload.file || '',
-        conversion,
-        sourceDimensions,
-        outputDimensions: targetDimensions(sourceDimensions, conversion.resolution),
-        sourceBytes: inputStat.size,
-        outputBytes: outputStat.size,
-        outputSize: formatBytes(outputStat.size),
-        mimeType: mimeTypeForPath(outputPath),
-        url: previews.put(outputData, mimeTypeForPath(outputPath)),
-      });
+      await previewWork.run(async (signal) => {
+        await convertImage(inputPath, outputPath, conversion, { signal });
+        const [inputStat, outputStat] = await Promise.all([fs.stat(inputPath), fs.stat(outputPath)]);
+        const outputData = await fs.readFile(outputPath);
+        const sourceDimensions = await imageInfo(inputPath, { signal });
+        const outputDimensions = targetDimensions(sourceDimensions, conversion.resolution);
+        // Match the source crop's field of view after output resizing.
+        const cropSize = Math.max(1, Math.round(Math.min(512, sourceDimensions.width, sourceDimensions.height) * outputDimensions.width / sourceDimensions.width));
+        const variants = {};
+        for (const view of ['overview', 'crop']) {
+          const derivative = path.join(tempDir, `${view}.png`);
+          await renderPreviewImage(outputPath, derivative, view, { signal, hdr: conversion.hdr, cropSize });
+          variants[view] = { data: await fs.readFile(derivative), mimeType: 'image/png' };
+        }
+        signal.throwIfAborted();
+        const previewUrl = previews.put(outputData, mimeTypeForPath(outputPath), variants);
+        estimator.remember(inputPath, inputStat, conversion, outputStat.size, sourceDimensions);
+        sendJson(res, {
+          folder: payload.folder || '', file: payload.file || '', conversion, sourceDimensions, outputDimensions,
+          sourceBytes: inputStat.size, outputBytes: outputStat.size, outputSize: formatBytes(outputStat.size),
+          mimeType: mimeTypeForPath(outputPath), url: previewUrl,
+          displayUrl: `${previewUrl}?view=overview`, cropUrl: `${previewUrl}?view=crop`,
+        });
+      }, { signal: controller.signal, priority: 60 });
     } finally {
       res.off('close', abort);
       await fs.rm(tempDir, { recursive: true, force: true });
@@ -431,8 +450,14 @@ async function handleApi(req, res, url) {
     const controller = new AbortController();
     const abort = () => { if (!res.writableEnded) controller.abort(); };
     res.once('close', abort);
+    if (res.destroyed) controller.abort();
     try {
-      sendJson(res, await suggestPreviewQuality(inputPath, payload.file || '', conversion, controller.signal));
+      const stat = await fs.stat(inputPath);
+      const key = JSON.stringify([inputPath, stat.size, stat.mtimeMs, conversion.format, conversion.effort, conversion.resolution]);
+      const result = qualitySuggestions.get(key) || await previewWork.run((signal) => suggestPreviewQuality(inputPath, payload.file || '', conversion, signal), { signal: controller.signal, priority: -20 });
+      if (qualitySuggestions.size >= 64) qualitySuggestions.delete(qualitySuggestions.keys().next().value);
+      qualitySuggestions.set(key, result);
+      sendJson(res, result);
     } finally {
       res.off('close', abort);
     }
@@ -445,8 +470,12 @@ async function handleApi(req, res, url) {
       sendText(res, 'Preview expired. Reopen the preview to generate it again.', 404);
       return;
     }
-    res.writeHead(200, { 'content-type': preview.mimeType, 'content-length': preview.data.length, 'cache-control': 'no-store' });
-    res.end(preview.data);
+    const view = url.searchParams.get('view');
+    if (view && !['overview', 'crop'].includes(view)) throw Object.assign(new Error('Unknown preview view'), { status: 400 });
+    const image = view ? preview.variants[view] : preview;
+    if (!image) throw Object.assign(new Error('Unknown preview view'), { status: 400 });
+    res.writeHead(200, { 'content-type': image.mimeType, 'content-length': image.data.length, 'cache-control': 'private, max-age=3600' });
+    res.end(image.data);
     return;
   }
 
@@ -455,10 +484,29 @@ async function handleApi(req, res, url) {
     const file = url.searchParams.get('file') || '';
     const imagePath = sourceImagePath(folder, file);
     await assertRealInside(config.screenshotsRoot, imagePath);
-    const reference = isJxr(imagePath) ? await hdrReferences.get(imagePath, url.searchParams.get('thumbnail') === '1') : null;
-    const data = reference?.data || await fs.readFile(imagePath);
-    res.writeHead(200, { 'content-type': reference?.mimeType || mimeTypeForPath(imagePath), 'cache-control': 'no-store' });
-    res.end(data);
+    const view = url.searchParams.get('view') || (url.searchParams.get('thumbnail') === '1' ? 'thumbnail' : null);
+    if (view && !PREVIEW_VIEWS.has(view)) throw Object.assign(new Error('Unknown preview view'), { status: 400 });
+    if (view) {
+      if (mutationActive || stopping) throw Object.assign(new Error('Previews are paused during an operation'), { status: 409 });
+      const controller = new AbortController();
+      const abort = () => { if (!res.writableEnded) controller.abort(); };
+      res.once('close', abort);
+      if (res.destroyed) controller.abort();
+      try {
+        const reference = await previewImages.get(imagePath, view, { signal: controller.signal });
+        res.writeHead(200, { 'content-type': reference.mimeType, 'content-length': reference.data.length, 'cache-control': 'private, max-age=3600' });
+        res.end(reference.data);
+      } finally { res.off('close', abort); }
+    } else if (isJxr(imagePath)) {
+      const reference = await hdrReferences.get(imagePath);
+      res.writeHead(200, { 'content-type': reference.mimeType, 'cache-control': 'no-store' });
+      res.end(reference.data);
+    } else {
+      const stat = await fs.stat(imagePath);
+      if (!stat.isFile()) throw Object.assign(new Error('Source image not found'), { status: 404 });
+      res.writeHead(200, { 'content-type': mimeTypeForPath(imagePath), 'content-length': stat.size, 'cache-control': 'no-store' });
+      await pipeline(createReadStream(imagePath), res);
+    }
     return;
   }
 
@@ -532,6 +580,7 @@ async function suggestPreviewQuality(inputPath, fileName, conversion, signal) {
           outputBytes: outputStat.size,
           reductionPercent: reductionPercent(sourceStat.size, outputStat.size),
         });
+        if ((conversion.format !== 'avif' || quality <= 40) && pickQualityElbow(candidates, sourceStat.size, false)) break;
       }
 
       const suggested = pickQualityElbow(candidates, sourceStat.size);
@@ -549,7 +598,7 @@ async function suggestPreviewQuality(inputPath, fileName, conversion, signal) {
   }
 }
 
-function pickQualityElbow(candidates, sourceBytes) {
+function pickQualityElbow(candidates, sourceBytes, allowFallback = true) {
   const sorted = [...candidates].sort((a, b) => b.quality - a.quality);
   for (let index = 0; index < sorted.length - 1; index += 1) {
     const current = sorted[index];
@@ -567,6 +616,7 @@ function pickQualityElbow(candidates, sourceBytes) {
     }
   }
 
+  if (!allowFallback) return null;
   const fallback = sorted.find((candidate) => candidate.quality <= 75) || sorted.at(-1);
   return {
     ...fallback,
@@ -661,6 +711,7 @@ const server = http.createServer(async (req, res) => {
       }
       mutationActive = true;
       estimator.cancelAll();
+      previewWork.cancelAll();
       ownsMutation = true;
     }
     if (url.pathname.startsWith('/api/')) {
@@ -677,11 +728,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.isBusy = () => mutationActive || pendingWrites > 0;
-server.prepareShutdown = () => { stopping = true; estimator.cancelAll(); };
+server.prepareShutdown = () => { stopping = true; estimator.cancelAll(); previewWork.cancelAll(); };
 server.prepareUpdate = () => {
   if (stopping || server.isBusy()) throw new Error('Wait for the current operation to finish before installing an update');
   if (!updater?.downloaded) throw new Error('Download and verify an update before installing it');
   stopping = true;
+  estimator.cancelAll();
+  previewWork.cancelAll();
   return updater.downloaded;
 };
 server.cancelUpdate = () => { stopping = false; };

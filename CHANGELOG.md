@@ -4,6 +4,15 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.3 - 2026-10-29
+
+- Replace full-source thumbnail loading with native 256px thumbnails, 1600px overview proxies, and matched center-detail crops. Keep complete source/converted files available through direct full-image links; preserve HDR proxies as 16-bit PQ/BT.2020 PNGs.
+- Keep file-list nodes while switching, load only visible/nearby thumbnails, use indexed size lookups, and release images/object URLs on close. Abort stale listing, image, conversion, estimate, and suggestion requests.
+- Serialize and prioritize expensive preview work. Delay Auto Quality until the primary conversion, cache its results, and stop at the existing size-curve elbow instead of encoding unnecessary remaining candidates. Bound derivative caches separately from complete converted previews.
+- Open every Obsidian note button in a new tab using paneType=tab, including links from older history without rewriting journals or losing heading targets.
+- Automatically propagate Format changes and preview Apply Settings to every folder with the exact same Note, matching Quality behavior. Remove the separate Apply Format button; keep JXR/PNG selection per-folder.
+- Verify all 146 automated tests, including cancellation/cleanup, native proxy bounds, full-resolution bytes, HDR metadata, cache accounting, and new-tab URIs. Check native/browser responsiveness on 127 synthetic 4K PNGs totaling 3.47 GB; real media is not used as a mutation target.
+
 ## 1.7.2 - 2026-10-29
 
 - Add an explicit Format copy action for all folders sharing the exact same Note; ordinary selector changes remain per-folder, and Quality/Resolution/JXR-PNG choices are preserved.
