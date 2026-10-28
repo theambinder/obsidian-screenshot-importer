@@ -179,7 +179,7 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === '/api/active-job' && req.method === 'GET') {
-    sendJson(res, { job: activeJobId ? { ...jobs.get(activeJobId).progress(), kind: jobs.get(activeJobId).kind } : null });
+    sendJson(res, { job: activeJobId ? jobProgress(jobs.get(activeJobId)) : null });
     return;
   }
 
@@ -199,6 +199,14 @@ async function handleApi(req, res, url) {
     });
   }
 
+  function jobProgress(job) {
+    const progress = { ...job.progress(), kind: job.kind };
+    if (activeJobId === job.id && ['done', 'partial', 'error'].includes(progress.status)) {
+      return { ...progress, status: 'running', current: 'Finalizing run journal...', finishedAt: null, log: null };
+    }
+    return progress;
+  }
+
   const jobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)$/);
   if (jobMatch) {
     const job = jobs.get(jobMatch[1]);
@@ -206,7 +214,7 @@ async function handleApi(req, res, url) {
       sendJson(res, { error: 'Job not found' }, 404);
       return;
     }
-    sendJson(res, { ...job.progress(), kind: job.kind });
+    sendJson(res, jobProgress(job));
     return;
   }
 

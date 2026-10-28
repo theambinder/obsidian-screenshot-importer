@@ -205,6 +205,9 @@ heading-specific URI (or a note-index fallback for failed items). The report kee
 its originating Run ID. Open History explicitly expands that Run and scrolls it
 below the sticky headers, without changing ordinary section scroll restoration.
 History disclosure triangles use 23px glyphs inside the existing compact buttons.
+Job polling reports a running finalization phase until the background run promise
+settles and releases the mutation lock, even if the journal's terminal status has
+already been assigned. Completed status therefore permits an immediate next action.
 Every Obsidian URI uses the official `paneType=tab` parameter
 (https://obsidian.md/help/uri). A frontend adapter also upgrades older journal links
 without rewriting history or losing encoded heading/path values.

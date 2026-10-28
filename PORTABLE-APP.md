@@ -128,7 +128,7 @@ Production launch is exclusively through the built native application. Legacy sh
 
 ## Verification (2026-10-29)
 
-Release 1.7.3 passes 146 automated tests, including the packaged backend without
+Release 1.7.3 passes 147 automated tests, including the packaged backend without
 external executables. Coverage includes folder-mtime ordering, landscape/portrait/
 ultrawide fitting, all output formats, HDR resizing and rollback, estimate sample
 limits, cache invalidation, preview reuse, cancellation/scratch cleanup, source-pair
@@ -144,6 +144,8 @@ per-result note buttons, and automatic expansion of the report's Run in History.
 Version 1.7.3 adds queue cancellation/priority, proxy byte limits, native overview/
 crop dimensions, HDR proxy color metadata, browser image release, full-image links,
 new-tab URI compatibility, and a 127-file / 3.47 GB synthetic 4K preview check.
+Terminal job status is exposed only after final journal writes and lock release;
+a deterministic delayed-checkpoint test covers immediate rollback after completion.
 
 Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
 10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,

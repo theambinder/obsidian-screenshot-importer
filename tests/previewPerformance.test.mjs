@@ -12,6 +12,7 @@ import { newTabNoteUri } from '../public/obsidianUri.js';
 import { obsidianOpenUri } from '../src/utils.mjs';
 import { resolveConfig } from '../src/config.mjs';
 import { createAppServer } from '../src/server.mjs';
+import { ImportJob } from '../src/runner.mjs';
 
 const project = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.env.PATH = `${path.join(project, 'dist/Obsidian Screenshot Importer.app/Contents/Resources/bin')}:/usr/bin:/bin:/usr/sbin:/sbin`;
@@ -187,4 +188,47 @@ test('HDR source and converted display proxies retain 16-bit PQ/BT2020 metadata'
     assert.deepEqual([...png.subarray(cicp + 4, cicp + 8)], [9, 16, 0, 1]);
     assert.ok(dimensions(png).every((value) => value > 0 && value <= 1600));
   }
+});
+
+test('terminal job status stays hidden until the final journal write releases the mutation lock', async (t) => {
+  const directory = await fixture(t);
+  const config = resolveConfig({ screenshotsRoot: path.join(directory, 'Screenshots'), vaultRoot: path.join(directory, 'Vault'), mediaRoot: path.join(directory, 'Vault/Media'), dataDir: path.join(directory, 'data') });
+  await fs.mkdir(path.join(config.mediaRoot, 'Series'), { recursive: true });
+  await fs.writeFile(path.join(config.mediaRoot, 'Series/Show.md'), '# Show\n');
+  await fs.mkdir(path.join(config.screenshotsRoot, 'Show'), { recursive: true });
+  await fs.writeFile(path.join(config.screenshotsRoot, 'Show/image.png'), 'disposable fixture');
+  const entered = deferred(), release = deferred();
+  const checkpoint = ImportJob.prototype.checkpoint;
+  ImportJob.prototype.checkpoint = async function () {
+    if (['done', 'partial', 'error'].includes(this.status)) { entered.resolve(); await release.promise; }
+    return checkpoint.call(this);
+  };
+  t.after(() => { release.resolve(); ImportJob.prototype.checkpoint = checkpoint; });
+  const server = createAppServer(config);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => { server.prepareShutdown(); server.closeAllConnections(); server.close(resolve); }));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (route, body) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const started = await post('/api/run', { items: [{ sourceFolderName: 'Show', notePath: 'Media/Series/Show.md', mode: 'episode', season: 1, episode: 1 }], conversion: { format: 'original' } });
+  const { jobId } = await started.json();
+  await entered.promise;
+  assert.equal((await (await fetch(base + `/api/jobs/${jobId}`)).json()).status, 'running');
+  assert.equal((await (await fetch(base + '/api/active-job')).json()).job.status, 'running');
+  assert.equal((await post('/api/rollback', { runId: jobId, background: true })).status, 409);
+  release.resolve();
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const snapshot = await (await fetch(base + `/api/jobs/${jobId}`)).json();
+    if (snapshot.status === 'done') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(server.isBusy(), false);
+  const rollback = await post('/api/rollback', { runId: jobId, background: true });
+  assert.equal(rollback.status, 200);
+  const rollbackId = (await rollback.json()).jobId;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const snapshot = await (await fetch(base + `/api/jobs/${rollbackId}`)).json();
+    if (snapshot.status === 'done') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(server.isBusy(), false);
 });

@@ -11,7 +11,8 @@ This file is the public release history. Checkouts with a private `AGENTS.local.
 - Serialize and prioritize expensive preview work. Delay Auto Quality until the primary conversion, cache its results, and stop at the existing size-curve elbow instead of encoding unnecessary remaining candidates. Bound derivative caches separately from complete converted previews.
 - Open every Obsidian note button in a new tab using paneType=tab, including links from older history without rewriting journals or losing heading targets.
 - Automatically propagate Format changes and preview Apply Settings to every folder with the exact same Note, matching Quality behavior. Remove the separate Apply Format button; keep JXR/PNG selection per-folder.
-- Verify all 146 automated tests, including cancellation/cleanup, native proxy bounds, full-resolution bytes, HDR metadata, cache accounting, and new-tab URIs. Check native/browser responsiveness on 127 synthetic 4K PNGs totaling 3.47 GB; real media is not used as a mutation target.
+- Keep terminal job status hidden until the final journal write and mutation-lock release finish, preventing a completed Run from intermittently rejecting an immediate rollback as still busy.
+- Verify all 147 automated tests, including cancellation/cleanup, native proxy bounds, full-resolution bytes, HDR metadata, cache accounting, new-tab URIs, and delayed-finalization ordering. Check native/browser responsiveness on 127 synthetic 4K PNGs totaling 3.47 GB; real media is not used as a mutation target.
 
 ## 1.7.2 - 2026-10-29
 
