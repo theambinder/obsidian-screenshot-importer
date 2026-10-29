@@ -9,6 +9,8 @@ import { formatBytes } from './formatBytes.js';
 import { noteModeInfo } from './mediaMode.js';
 import { createPreviewImageLoader } from './previewImages.js';
 import { newTabNoteUri } from './obsidianUri.js';
+import { bindQualityInput } from './qualityInput.js';
+import { firstReturnedFolder } from './reportNavigation.js';
 
 const state = {
   config: null,
@@ -41,6 +43,9 @@ const state = {
   lastCheckboxIndex: null,
   openRunIds: new Set(),
   doneRunId: null,
+  doneDestination: 'history',
+  doneReturnedFolders: [],
+  revealedFolderName: null,
   historyFocusRunId: null,
   preview: {
     folder: null,
@@ -77,6 +82,7 @@ const els = {
   currentText: $('#currentText'),
   doneModal: $('#doneModal'),
   doneModalBody: $('#doneModalBody'),
+  doneSummary: $('#doneSummary'),
   doneOkButton: $('#doneOkButton'),
   doneTitle: $('#doneTitle'),
   effortSelect: $('#effortSelect'),
@@ -84,7 +90,7 @@ const els = {
   formatSelect: $('#formatSelect'),
   mediaPath: $('#mediaPath'),
   openArchiveButton: $('#openArchiveButton'),
-  openHistoryButton: $('#openHistoryButton'),
+  doneNavigateButton: $('#doneNavigateButton'),
   progressFill: $('#progressFill'),
   progressText: $('#progressText'),
   previewConvertedImage: $('#previewConvertedImage'),
@@ -222,7 +228,14 @@ $('#folderSortSelect').addEventListener('change', (event) => {
   setFolderSort(key ? { key, direction } : null);
 });
 $('#resetSortButton').addEventListener('click', () => setFolderSort(null));
-els.openHistoryButton.addEventListener('click', () => {
+els.doneNavigateButton.addEventListener('click', () => {
+  if (state.doneDestination === 'screenshots') {
+    const target = firstReturnedFolder(state.visibleFolders, state.doneReturnedFolders);
+    hideDoneModal();
+    setTab('screenshots');
+    if (target) revealScreenshotFolder(target);
+    return;
+  }
   const runId = state.doneRunId;
   if (runId) {
     state.openRunIds.add(runId);
@@ -589,6 +602,33 @@ function setQualityForFolderGroup(sourceFolder, quality) {
   sourceFolder.qualityOverride = true;
 }
 
+function updateFolderQuality(sourceFolder, quality, editedInput) {
+  if (sourceFolder.qualityOverride && qualityValue(sourceFolder) === quality) return;
+  setQualityForFolderGroup(sourceFolder, quality);
+  stopTableEstimates();
+  for (const row of els.foldersBody.querySelectorAll('.folder-row')) {
+    const folder = state.visibleFolders[Number(row.dataset.index)];
+    if (folder !== sourceFolder && (!sourceFolder.selectedNotePath || folder.selectedNotePath !== sourceFolder.selectedNotePath)) continue;
+    const input = row.querySelector('.row-quality-input');
+    if (input !== editedInput && input.value !== String(quality)) input.value = String(quality);
+    input.title = qualityTitle(folder);
+    updateEstimateRow(row);
+  }
+  scheduleTableEstimates();
+}
+
+function revealScreenshotFolder(folder) {
+  state.revealedFolderName = folder.name;
+  for (const row of els.foldersBody.querySelectorAll('.folder-row')) {
+    const revealed = state.visibleFolders[Number(row.dataset.index)]?.name === folder.name;
+    row.classList.toggle('is-revealed', revealed);
+    if (revealed) {
+      row.scrollIntoView({ block: 'start' });
+      row.querySelector('.source-name').focus({ preventScroll: true });
+    }
+  }
+}
+
 function buildNoteIndex() {
   state.noteValues.clear();
   for (const note of state.notes) {
@@ -625,7 +665,7 @@ function renderFolderRows() {
     const hdrOnly = selectedNames.length > 0 && selectedNames.every(isJxr);
     const hasPairs = duplicatePairs((folder.images || []).map((image) => image.name)).length > 0;
     const tr = document.createElement('tr');
-    tr.className = `folder-row${folder.enabled ? ' is-selected' : ''}`;
+    tr.className = `folder-row${folder.enabled ? ' is-selected' : ''}${state.revealedFolderName === folder.name ? ' is-revealed' : ''}`;
     tr.dataset.index = String(index);
     tr.innerHTML = `
       <td class="use-cell" title="Double-click to select or clear all folders for this note">
@@ -716,10 +756,9 @@ function renderFolderRows() {
     tr.querySelector('.source-name').addEventListener('click', () => openSourceFolder(folder.name));
     tr.querySelector('.preview-folder').addEventListener('click', () => openPreviewModal(folder).catch((error) => { if (error.name !== 'AbortError') showFatal(error); }));
     openNoteButton.addEventListener('click', () => openSelectedNote(folder));
-    rowQualityInput.addEventListener('change', () => {
-      const quality = clampQuality(rowQualityInput.value, defaultQuality());
-      setQualityForFolderGroup(folder, quality);
-      renderFolders();
+    bindQualityInput(rowQualityInput, {
+      fallback: () => defaultQualityForFolder(folder),
+      apply: (quality) => updateFolderQuality(folder, quality, rowQualityInput),
     });
     tr.querySelector('.row-resolution').addEventListener('change', (event) => {
       setFolderEncodingGroup(folder, { resolution: event.target.value });
@@ -1521,17 +1560,20 @@ function setProgress(job) {
 
 function showDoneModal(results, runId) {
   state.doneRunId = runId || null;
+  state.doneDestination = 'history';
+  state.doneReturnedFolders = [];
+  els.doneNavigateButton.textContent = 'Open History';
   els.doneTitle.textContent = 'Done';
   const successful = results.filter((result) => result.status === 'done');
   const failed = results.filter((result) => result.status !== 'done');
   els.doneTitle.textContent = failed.length ? 'Completed with errors' : 'Done';
   const total = summarizeResults(successful);
+  els.doneSummary.innerHTML = `
+    <strong>${formatUnit(total.works, 'work')} · ${formatUnit(total.screenshots, 'screenshot')}</strong>
+    <span>${formatSizePair(total.sourceBytes, total.outputBytes)}</span>
+    ${failed.length ? `<span class="report-errors">${formatCount(failed.length)} failed</span>` : ''}
+  `;
   els.doneModalBody.innerHTML = `
-    <div class="result-summary">
-      <div class="result-title">${formatUnit(total.works, 'work')} · ${formatUnit(total.screenshots, 'screenshot')}</div>
-      <div class="result-meta">${formatSizePair(total.sourceBytes, total.outputBytes)}</div>
-      ${failed.length ? `<div class="result-meta">${formatCount(failed.length)} failed</div>` : ''}
-    </div>
     <div class="modal-items">
       ${results.map((result) => `
         <div class="modal-item run-result-item">
@@ -1546,6 +1588,7 @@ function showDoneModal(results, runId) {
       `).join('')}
     </div>
   `;
+  els.doneModalBody.scrollTop = 0;
   els.doneModalBody.querySelectorAll('.open-result-note').forEach((button) => {
     button.addEventListener('click', () => {
       if (button.dataset.noteUri) window.location.href = newTabNoteUri(button.dataset.noteUri);
@@ -1556,25 +1599,20 @@ function showDoneModal(results, runId) {
 
 function showRollbackModal(run, result) {
   state.doneRunId = run.runId;
+  state.doneDestination = 'screenshots';
+  state.doneReturnedFolders = result.returnedFolders || [];
+  els.doneNavigateButton.textContent = 'Open Screenshots';
   const errors = result.errors || [];
   els.doneTitle.textContent = result.status === 'done' ? 'Rollback Done' : 'Rollback Partial';
+  els.doneSummary.innerHTML = `
+    <strong>${formatUnit(state.doneReturnedFolders.length, 'source folder')} · ${formatUnit(new Set(result.restoredNotes || []).size, 'note updated')}</strong>
+    <span>${formatUnit(result.deletedFiles?.length || 0, 'generated file')} deleted${result.restoredFiles?.length ? ` · ${formatUnit(result.restoredFiles.length, 'attachment')} restored` : ''}${result.retainedFiles?.length ? ` · ${formatUnit(result.retainedFiles.length, 'referenced attachment')} kept` : ''}</span>
+    <span class="report-date">${escapeHtml(formatDate(result.finishedAt) || 'Rollback complete')}</span>
+    ${errors.length ? `<span class="report-errors">${formatUnit(errors.length, 'error')}</span>` : ''}
+  `;
   els.doneModalBody.innerHTML = `
-    <div class="result-summary">
-      <div class="result-title">${escapeHtml(formatDate(result.finishedAt) || 'Rollback complete')}</div>
-      <div class="result-meta">${escapeHtml(run.startedAt ? formatRunTitle(run) : `Run ${run.runId}`)}</div>
-      ${errors.length ? `<div class="result-meta">${formatUnit(errors.length, 'error')}</div>` : ''}
-    </div>
     <div class="modal-items">
-      <div class="modal-item">
-        <div class="result-title">Restored</div>
-        <div class="result-meta">
-          ${formatUnit(result.returnedFolders?.length || 0, 'source folder')} ·
-          ${formatUnit(new Set(result.restoredNotes || []).size, 'note updated')} ·
-          ${formatUnit(result.deletedFiles?.length || 0, 'generated file')} deleted
-          ${result.restoredFiles?.length ? ` · ${formatUnit(result.restoredFiles.length, 'attachment')} restored` : ''}
-          ${result.retainedFiles?.length ? ` · ${formatUnit(result.retainedFiles.length, 'referenced attachment')} kept` : ''}
-        </div>
-      </div>
+      ${state.doneReturnedFolders.map((name) => `<div class="modal-item"><div class="result-title">${escapeHtml(name)}</div><div class="result-meta">Source folder restored</div></div>`).join('')}
       ${result.skippedFolders?.length ? `
         <div class="modal-item">
           <div class="result-title">Skipped</div>
@@ -1589,6 +1627,7 @@ function showRollbackModal(run, result) {
       ` : ''}
     </div>
   `;
+  els.doneModalBody.scrollTop = 0;
   els.doneModal.hidden = false;
 }
 

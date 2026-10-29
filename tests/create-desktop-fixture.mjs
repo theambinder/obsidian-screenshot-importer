@@ -9,7 +9,8 @@ const withDuplicates = process.argv.includes('--duplicates');
 const withNavigation = process.argv.includes('--navigation');
 const withHdr = process.argv.includes('--hdr');
 const withHeavy = process.argv.includes('--heavy');
-const fixtureName = withHeavy ? 'desktop-heavy-fixture' : withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
+const withReports = process.argv.includes('--reports');
+const fixtureName = withReports ? 'desktop-report-fixture' : withHeavy ? 'desktop-heavy-fixture' : withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
 const root = path.join(projectRoot, 'build', fixtureName);
 const locations = {
   screenshotsRoot: path.join(root, 'Screenshots'),
@@ -33,12 +34,14 @@ if (withDuplicates) {
     }
   }
 }
-if (withNavigation) {
+if (withNavigation || withReports) {
   for (let episode = 2; episode <= 60; episode += 1) {
     const source = path.join(locations.screenshotsRoot, `Portable.Test.S01E${String(episode).padStart(2, '0')}`);
     await fs.mkdir(source, { recursive: true });
     await fs.copyFile(path.join(folder, 'test.00-01-02.1.png'), path.join(source, 'test.00-01-02.1.png'));
   }
+}
+if (withNavigation) {
   const runsDir = path.join(locations.dataDir, 'runs');
   await fs.mkdir(runsDir, { recursive: true });
   // Simulated completed rollbacks create a long, non-actionable History list.

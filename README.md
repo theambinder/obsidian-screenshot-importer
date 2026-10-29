@@ -128,6 +128,9 @@ for review. A bare number before a technical bracket, such as `Example Show 23
 
 The completed Run report provides an Obsidian button for each folder, targeting its
 work or episode heading. **Open History** expands and scrolls to that specific Run.
+After rollback, **Open Screenshots** instead reveals and focuses the first returned
+folder in the current table order without selecting it. Report totals remain beside
+the title; only the folder list scrolls, keeping the close and action buttons visible.
 All Obsidian buttons open a new tab instead of replacing the active note, using the
 official [`paneType=tab` URI parameter](https://obsidian.md/help/uri).
 

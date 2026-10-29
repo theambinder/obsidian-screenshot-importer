@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.7.3-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.3-Sources.zip` is a separate optional release asset, not required to run or update the app.
+1. Download `Obsidian-Screenshot-Importer-1.7.4-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.4-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -128,7 +128,7 @@ Production launch is exclusively through the built native application. Legacy sh
 
 ## Verification (2026-10-29)
 
-Release 1.7.3 passes 147 automated tests, including the packaged backend without
+Release 1.7.4 passes 152 automated tests, including the packaged backend without
 external executables. Coverage includes folder-mtime ordering, landscape/portrait/
 ultrawide fitting, all output formats, HDR resizing and rollback, estimate sample
 limits, cache invalidation, preview reuse, cancellation/scratch cleanup, source-pair
@@ -146,6 +146,12 @@ crop dimensions, HDR proxy color metadata, browser image release, full-image lin
 new-tab URI compatibility, and a 127-file / 3.47 GB synthetic 4K preview check.
 Terminal job status is exposed only after final journal writes and lock release;
 a deterministic delayed-checkpoint test covers immediate rollback after completion.
+Version 1.7.4 preserves native Quality controls across repeated steps and validates
+draft/commit handling and rollback navigation targets. A disposable 60-folder run
+checks long reports in native WKWebView and narrow/short browser viewports, fixed
+header/footer visibility after list scrolling, History targeting, and full/per-folder
+rollback navigation without automatic selection. Report totals use a compact header
+instead of a separate result card.
 
 Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
 10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,

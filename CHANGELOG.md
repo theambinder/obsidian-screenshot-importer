@@ -4,6 +4,13 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.4 - 2026-10-29
+
+- Keep table Quality controls in place during edits so repeated native stepper clicks, focus, and text selection are preserved. Update matching Note rows and estimates without rebuilding the table; normalize incomplete/out-of-range values only on commit.
+- Replace Open History with Open Screenshots after full or per-folder rollback. Reveal and focus the first actually returned folder in the current table order, with a visible outline and no automatic selection. Import reports retain navigation to their originating Run in History.
+- Keep Done and rollback report headers, close buttons, aggregate totals, and footer actions visible while only the folder list scrolls. Move totals out of the folder cards into a compact title-area summary with reduced padding and responsive wrapping.
+- Verify all 152 automated tests and disposable 60-folder native/browser checks, including repeated Quality steps, long reports in narrow/short windows, scrolling, and full/per-folder rollback navigation. Real screenshots, Media notes, and production history are not used as mutation targets.
+
 ## 1.7.3 - 2026-10-29
 
 - Replace full-source thumbnail loading with native 256px thumbnails, 1600px overview proxies, and matched center-detail crops. Keep complete source/converted files available through direct full-image links; preserve HDR proxies as 16-bit PQ/BT.2020 PNGs.

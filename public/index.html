@@ -235,12 +235,15 @@
     <div id="doneModal" class="modal-backdrop" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
         <div class="modal-head">
-          <h2 id="doneTitle">Done</h2>
+          <div class="done-heading">
+            <h2 id="doneTitle">Done</h2>
+            <div id="doneSummary" class="done-summary"></div>
+          </div>
           <button id="closeModalButton" class="icon-button" type="button" aria-label="Close">×</button>
         </div>
         <div id="doneModalBody" class="modal-body"></div>
         <div class="modal-actions">
-          <button id="openHistoryButton" type="button">Open History</button>
+          <button id="doneNavigateButton" type="button">Open History</button>
           <button id="doneOkButton" class="primary" type="button">OK</button>
         </div>
       </div>

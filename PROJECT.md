@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.7.3**. The authoritative version is `package.json`.
+Current version: **1.7.4**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -125,6 +125,9 @@ progress counts only selected conversions. Legacy journals remain compatible.
 Quality Defaults in Settings stores a fallback and category values. Anime starts
 at 50; the other categories start at 90. Per-note overrides take precedence and
 apply to every row sharing the Note. Output settings are captured for each import.
+Table Quality edits update the existing controls and estimates without rebuilding
+rows, preserving native stepper repetition, focus, and text selection. Valid integer
+input applies immediately; blank/out-of-range drafts are normalized only on commit.
 
 Preview has a thumbnail file list with total count/size, stacked original/converted
 images, central detail crops, output size, and isolated temporary encoder settings.
@@ -302,6 +305,10 @@ deletion. Restoring from Trash is possible until the Trash is emptied.
   eligible folders in the same run.
 - Results: import and rollback completion dialogs include totals, per-folder
   outcomes, and errors. Size pairs use an arrow and reduction in parentheses.
+  A compact fixed header holds the title, aggregate summary, and close button.
+  Only the list scrolls; footer actions remain visible. Import reports open their
+  originating Run in History. Rollback reports open Screenshots and reveal/focus
+  the first actually returned folder in current table order without checking it.
 - Settings: Appearance, Output, Quality Defaults, Locations, and Update. Theme is
   System/Light/Dark, follows OS changes when System is selected, and persists.
 - Navigation: each section retains independent scroll state for the window session;
