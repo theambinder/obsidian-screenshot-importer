@@ -44,6 +44,23 @@ test('Quality commit clamps invalid values and restores the category fallback fo
   }
 });
 
+test('custom Quality chevrons repeat, clamp boundaries, and keep the active input', () => {
+  const input = new QualityInput('90'), applied = [];
+  const increaseButton = new EventTarget(), decreaseButton = new EventTarget();
+  bindQualityInput(input, { apply: (value) => applied.push(value), fallback: () => 50, increaseButton, decreaseButton });
+  for (let n = 0; n < 5; n++) decreaseButton.dispatchEvent(new Event('click'));
+  assert.equal(input.value, '85');
+  assert.equal(applied.at(-1), 85);
+  input.nativeValue = '100'; increaseButton.dispatchEvent(new Event('click'));
+  assert.equal(input.value, '100');
+  input.nativeValue = '1'; decreaseButton.dispatchEvent(new Event('click'));
+  assert.equal(input.value, '1');
+  input.nativeValue = ''; increaseButton.dispatchEvent(new Event('click'));
+  assert.equal(input.value, '51');
+  const down = new Event('pointerdown', { cancelable: true });
+  assert.equal(decreaseButton.dispatchEvent(down), false, 'Pointer clicks must not select text or steal input focus');
+});
+
 test('rollback navigation chooses a returned folder in the current table order without selecting it', () => {
   const folders = [{ name: 'Unrelated', enabled: false }, { name: '[Release] Show S1E2', enabled: false }, { name: 'Show S1E1', enabled: false }];
   const before = structuredClone(folders);

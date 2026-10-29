@@ -2,8 +2,8 @@
 
 ## Quick Start
 
-1. Download `Obsidian-Screenshot-Importer-1.7.4-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
-2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.4-Sources.zip` is a separate optional release asset, not required to run or update the app.
+1. Download `Obsidian-Screenshot-Importer-1.7.5-Apple-Silicon.zip` from [GitHub Releases](https://github.com/theambinder/obsidian-screenshot-importer/releases), or transfer a locally built `dist` ZIP to another Mac (AirDrop, iCloud Drive, or external drive).
+2. Put the ZIP in **Downloads**, unzip it there, and drag **Obsidian Screenshot Importer.app** into **Applications**. The main ZIP contains only the app. Keep a local copy on each Mac, rather than launching a partially downloaded app bundle from iCloud. `Obsidian-Screenshot-Importer-1.7.5-Sources.zip` is a separate optional release asset, not required to run or update the app.
 3. Open the app. There is no Terminal window, installer, Homebrew, Node.js setup, or separate server to start.
 4. Close the main window or press **Cmd+Q** when finished. The owned local service exits too. An active import, rollback, or Trash operation is allowed to finish first. Do not force-quit or put the Mac to sleep while it finishes.
 
@@ -72,6 +72,15 @@ Each section remembers its own scroll position for the current window session. S
 
 The backend listens only on `127.0.0.1` on an automatically assigned free port. No fixed port 3787 and no globally installed tools are required. It is owned by the native app and is shut down via a private pipe. If the host disappears unexpectedly, the backend waits for an active mutation to finish, then exits. A hard OS shutdown cannot be made transactional; retain source archives until checking the result.
 
+During Run, Stop finishes the current folder and leaves later folders untouched.
+Completed folders remain rollbackable; no immediate process kill, pause/resume, or
+automatic rollback is performed. The progress band resets after completion.
+If the backend is forcibly killed, the next desktop startup marks unfinished imports
+Interrupted under the data lock and offers History for review/rollback without
+automatically retrying them. Source/vault data is not changed during this recovery scan.
+Sequential and parallel outputs both have their intended hashes journaled before
+atomic publication, including overwrite intent/backup identification.
+
 ## Build and Maintenance
 
 Developer build on an Apple Silicon Mac with Apple's Command Line Tools, CMake,
@@ -128,7 +137,7 @@ Production launch is exclusively through the built native application. Legacy sh
 
 ## Verification (2026-10-29)
 
-Release 1.7.4 passes 152 automated tests, including the packaged backend without
+Release 1.7.5 passes 162 automated tests, including the packaged backend without
 external executables. Coverage includes folder-mtime ordering, landscape/portrait/
 ultrawide fitting, all output formats, HDR resizing and rollback, estimate sample
 limits, cache invalidation, preview reuse, cancellation/scratch cleanup, source-pair
@@ -152,6 +161,13 @@ checks long reports in native WKWebView and narrow/short browser viewports, fixe
 header/footer visibility after list scrolling, History targeting, and full/per-folder
 rollback navigation without automatic selection. Report totals use a compact header
 instead of a separate result card.
+Version 1.7.5 covers cooperative Stop before/during/after folder processing, repeated
+stop requests, mutation exclusion, terminal journal ordering, idempotent startup
+recovery, custom Quality controls, and active-import SIGTERM. Four deterministic
+SIGKILL checkpoints verify restart/rollback before publication, after publication,
+before archive rename, and after archive rename, retaining originals and overwritten
+attachments. Native/browser checks cover idle progress, recovery History navigation,
+centered disclosure geometry, and matching arrow styling in both themes.
 
 Release 1.6.0 adds synthetic scRGB captures with 1000-nit highlights and tests for
 10-bit AVIF, PQ/BT.2020 metadata, 16-bit reference PNG cICP, all pair policies,

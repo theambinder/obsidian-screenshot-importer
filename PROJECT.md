@@ -1,6 +1,6 @@
 # Project Specification
 
-Current version: **1.7.4**. The authoritative version is `package.json`.
+Current version: **1.7.5**. The authoritative version is `package.json`.
 Canonical repository: https://github.com/theambinder/obsidian-screenshot-importer.
 
 ## Purpose and Scope
@@ -259,6 +259,25 @@ cannot be reconstructed and must not be guessed.
 
 ## Archives and Rollback
 
+Import Stop is cooperative at folder boundaries. A request never interrupts image
+publication, Markdown insertion, archive moves, or checkpoints inside the current
+folder. Planned folder names and stop-request time are journaled. Remaining folders
+are not started; completed items retain ordinary rollback support. A last-folder
+request still yields Done when no work remains. No pause/resume or automatic rollback
+is performed, and the exclusive mutation lock is held through final journal completion.
+
+After acquiring the desktop data lock, startup marks unfinished queued/running
+imports and running items Interrupted without replaying mutations or altering source/
+vault files. Journal evidence and completed item status remain intact. The interface
+offers a recovery notice linking to History. Normal quit and parent-pipe loss still
+drain the active operation; SIGKILL cannot be intercepted. This is process-crash
+recovery, not a power-loss/filesystem/iCloud transaction guarantee.
+
+All encoder modes, including single-worker/copy, prepare scratch outputs before
+publication. Intended output hashes are checkpointed before atomic publication.
+Overwrite backups also record their original hash so rollback distinguishes an
+unpublished intent from a completed overwrite, while protecting later external edits.
+
 After a folder succeeds, originals move to `_archive/<run-id>/<folder-name>`.
 Run journals are written atomically to `runs/<run-id>.json`. Note and overwritten
 attachment backups are stored under `backups/<run-id>`. Originals are not deleted
@@ -309,6 +328,8 @@ deletion. Restoring from Trash is possible until the Trash is emptied.
   Only the list scrolls; footer actions remain visible. Import reports open their
   originating Run in History. Rollback reports open Screenshots and reveal/focus
   the first actually returned folder in current table order without checking it.
+  Terminal operations reset the progress band to idle; Stopped reports also count
+  folders not started. During import the same action slot offers Stop/Stopping.
 - Settings: Appearance, Output, Quality Defaults, Locations, and Update. Theme is
   System/Light/Dark, follows OS changes when System is selected, and persists.
 - Navigation: each section retains independent scroll state for the window session;
@@ -317,6 +338,9 @@ deletion. Restoring from Trash is possible until the Trash is emptied.
   compact narrow rows without
   horizontal overflow. Service/progress, section, and table headers remain sticky
   without transparent gaps. Navigation and process actions occupy separate rows.
+  Selects and table Quality share local Lucide chevrons; Quality has separate
+  increment/decrement hit areas while retaining its stable numeric input. History
+  disclosure triangles use centered geometry rather than font-dependent glyphs.
 
 ## Desktop Architecture
 

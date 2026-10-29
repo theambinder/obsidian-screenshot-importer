@@ -10,7 +10,8 @@ const withNavigation = process.argv.includes('--navigation');
 const withHdr = process.argv.includes('--hdr');
 const withHeavy = process.argv.includes('--heavy');
 const withReports = process.argv.includes('--reports');
-const fixtureName = withReports ? 'desktop-report-fixture' : withHeavy ? 'desktop-heavy-fixture' : withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
+const withLifecycle = process.argv.includes('--lifecycle');
+const fixtureName = withLifecycle ? 'desktop-lifecycle-fixture' : withReports ? 'desktop-report-fixture' : withHeavy ? 'desktop-heavy-fixture' : withHdr ? 'desktop-hdr-fixture' : withNavigation ? 'desktop-navigation-fixture' : withDuplicates ? 'desktop-duplicates-fixture' : 'desktop-ui-fixture';
 const root = path.join(projectRoot, 'build', fixtureName);
 const locations = {
   screenshotsRoot: path.join(root, 'Screenshots'),
@@ -40,6 +41,20 @@ if (withNavigation || withReports) {
     await fs.mkdir(source, { recursive: true });
     await fs.copyFile(path.join(folder, 'test.00-01-02.1.png'), path.join(source, 'test.00-01-02.1.png'));
   }
+}
+if (withLifecycle) {
+  for (let episode = 1; episode <= 8; episode++) {
+    const source = path.join(locations.screenshotsRoot, `Portable.Test.S01E${String(episode).padStart(2, '0')}`);
+    await fs.mkdir(source, { recursive: true });
+    for (let image = 1; image <= 12; image++) await fs.copyFile(path.join(folder, 'test.00-01-02.1.png'), path.join(source, `test.${image}.png`));
+  }
+  const runId = '2026-10-29T00-00-00-000Z-recovery-fixture';
+  await fs.mkdir(path.join(locations.dataDir, 'runs'), { recursive: true });
+  await fs.writeFile(path.join(locations.dataDir, 'runs', `${runId}.json`), JSON.stringify({
+    runId, status: 'running', startedAt: '2026-10-29T00:00:00Z', finishedAt: null,
+    items: [{ sourceFolderName: 'Portable.Test.S01E01', notePath: 'Media/Series/Portable Test.md', mode: 'episode', season: 1, episode: 1, status: 'running', generatedFiles: [] }],
+    generatedFiles: [], archivedFolders: [], notes: [],
+  }));
 }
 if (withNavigation) {
   const runsDir = path.join(locations.dataDir, 'runs');

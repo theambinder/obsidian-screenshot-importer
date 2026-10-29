@@ -32,7 +32,7 @@ import { assertInside, commandVersion, formatBytes, IMAGE_EXTENSIONS, naturalCom
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.resolve(__dirname, '../public');
-export function createAppServer(config = resolveConfig(), { updater = null } = {}) {
+export function createAppServer(config = resolveConfig(), { updater = null, recoveredRuns = [] } = {}) {
 const jobs = new Map();
 const previews = new PreviewCache();
 const hdrReferences = new HdrReferenceCache(new PreviewCache());
@@ -183,11 +183,26 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (url.pathname === '/api/recovery' && req.method === 'GET') {
+    sendJson(res, { recoveredRuns });
+    return;
+  }
+
+  const stopMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/stop$/);
+  if (stopMatch && req.method === 'POST') {
+    const job = jobs.get(stopMatch[1]);
+    if (!job || job.id !== activeJobId || job.kind !== 'import' || !job.requestStop()) {
+      throw Object.assign(new Error('No active import can be stopped'), { status: 409 });
+    }
+    sendJson(res, { stopRequested: true });
+    return;
+  }
+
   function startJob(job) {
     jobs.set(job.id, job);
     for (const [id, previous] of jobs) {
       if (jobs.size <= 100) break;
-      if (['done', 'partial', 'error'].includes(previous.status)) jobs.delete(id);
+      if (['done', 'partial', 'error', 'stopped'].includes(previous.status)) jobs.delete(id);
     }
     mutationActive = true;
     activeJobId = job.id;
@@ -201,7 +216,7 @@ async function handleApi(req, res, url) {
 
   function jobProgress(job) {
     const progress = { ...job.progress(), kind: job.kind };
-    if (activeJobId === job.id && ['done', 'partial', 'error'].includes(progress.status)) {
+    if (activeJobId === job.id && ['done', 'partial', 'error', 'stopped'].includes(progress.status)) {
       return { ...progress, status: 'running', current: 'Finalizing run journal...', finishedAt: null, log: null };
     }
     return progress;

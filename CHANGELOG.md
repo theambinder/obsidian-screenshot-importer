@@ -4,6 +4,15 @@ Version source: `package.json`. The same version is shown in Settings, the nativ
 
 This file is the public release history. Checkouts with a private `AGENTS.local.md` also maintain their local Obsidian changelog; personal notes and instructions are not distributed.
 
+## 1.7.5 - 2026-10-29
+
+- Reset completed operation progress to idle; retain results in the report and History instead of leaving a previous Run's counters and filename in the progress band.
+- Add cooperative Stop during import. Finish the current folder's images, note, archive, and journal before stopping; leave later folders untouched and keep completed folders rollbackable. Show Stopping/Stopped and the number of folders not started. Do not start overlapping mutations or automatically roll back completed work.
+- Mark unfinished imports Interrupted on the next desktop startup under the data lock, preserving journal evidence and offering History for review/rollback without automatic retry. Verify graceful quit, native-host pipe loss, active-import SIGTERM, and backend SIGKILL recovery.
+- Stage sequential/copy outputs too, persist intended output hashes before publication, and record overwrite-backup hashes. Rollback can distinguish a crash before an overwrite from a published result and preserves later external modifications.
+- Center History disclosure triangles geometrically and use matching local Lucide chevrons for selectors and table Quality controls, preserving repeated increments/decrements, keyboard editing, and light/dark appearance.
+- Verify all 162 automated tests, including four deterministic process-kill checkpoints, plus disposable native/browser checks. Production screenshots, notes, history, and installed applications are not used as mutation targets.
+
 ## 1.7.4 - 2026-10-29
 
 - Keep table Quality controls in place during edits so repeated native stepper clicks, focus, and text selection are preserved. Update matching Note rows and estimates without rebuilding the table; normalize incomplete/out-of-range values only on commit.

@@ -28,10 +28,16 @@
             <div id="progressText" class="progress-text"></div>
           </div>
           <div class="top-actions">
+            <button id="stopRunButton" type="button" class="button-with-icon" title="Finish the current folder, then stop; completed folders remain rollbackable" hidden><span class="ui-icon icon-stop" aria-hidden="true"></span>Stop</button>
             <button id="runButton" type="button" class="primary">▶ Run</button>
           </div>
         </div>
         <div id="currentText" class="current-text">Select folders and press Run to start</div>
+        <div id="recoveryNotice" class="recovery-notice" role="status" hidden>
+          <span>Interrupted import detected. Review History before retrying.</span>
+          <button id="reviewRecoveryButton" type="button">Open History</button>
+          <button id="dismissRecoveryButton" type="button" class="icon-button" aria-label="Dismiss recovery notice">×</button>
+        </div>
       </section>
     </div>
 

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mediaNotePath, sourceFolderPath, assertRealInside } from './paths.mjs';
-import { convertImage, normalizeConversionSettings, publishStagedImage } from './converter.mjs';
+import { normalizeConversionSettings, publishStagedImage } from './converter.mjs';
 import { prepareImages, resolveParallelImages } from './conversionBatch.mjs';
 import { APP_VERSION } from './version.mjs';
 import { parseSeasonNumber, parseEpisodeNumber } from '../public/episodeSelection.js';
@@ -41,6 +41,7 @@ export class ImportJob {
     this.doneFiles = 0;
     this.current = '';
     this.results = [];
+    this.stopRequested = false;
     this.log = {
       version: 1,
       appVersion: APP_VERSION,
@@ -72,8 +73,17 @@ export class ImportJob {
       startedAt: this.startedAt,
       finishedAt: this.finishedAt,
       results: this.results,
-      log: ['done', 'partial', 'error'].includes(this.status) ? this.log : null,
+      stopRequested: this.stopRequested,
+      remainingFolders: Math.max(0, (this.log.plannedFolders?.length || 0) - this.log.items.length),
+      log: ['done', 'partial', 'error', 'stopped'].includes(this.status) ? this.log : null,
     };
+  }
+
+  requestStop() {
+    if (!['queued', 'running'].includes(this.status)) return false;
+    this.stopRequested = true;
+    this.log.stopRequestedAt ||= new Date().toISOString();
+    return true;
   }
 
   async run() {
@@ -87,13 +97,16 @@ export class ImportJob {
         if (sources.has(selection.sourceFolderName)) throw new Error('Duplicate source folder in run');
         sources.add(selection.sourceFolderName);
       }
+      this.log.plannedFolders = selections.map((selection) => selection.sourceFolderName);
       await this.checkpoint();
       this.totalFiles = await this.countFiles(selections);
       for (const selection of selections) {
+        if (this.stopRequested) break;
         await this.processSelection(selection);
       }
       const errors = this.log.items.filter((item) => item.status === 'error').length;
-      this.status = errors ? (errors === this.log.items.length ? 'error' : 'partial') : 'done';
+      const stopped = this.stopRequested && this.log.items.length < selections.length;
+      this.status = stopped ? 'stopped' : errors ? (errors === this.log.items.length ? 'error' : 'partial') : 'done';
       if (errors) this.error = `${errors} folder(s) failed. See the run results.`;
     } catch (error) {
       this.status = 'error';
@@ -217,6 +230,8 @@ export class ImportJob {
           continue;
         }
 
+        if (!stagedPath) throw new Error('Existing attachment changed during import; retry this folder');
+
         await assertRealInside(this.config.vaultRoot, outputPath);
         const rel = vaultRelative(this.config, outputPath);
         const posixRel = toPosixPath(rel);
@@ -224,14 +239,14 @@ export class ImportJob {
           const backupPath = path.join(this.config.backupsDir, this.id, 'attachments', posixRel);
           await ensureDir(path.dirname(backupPath));
           await fs.copyFile(outputPath, backupPath);
-          itemLog.replacedFiles.push({ path: posixRel, backupPath });
+          itemLog.replacedFiles.push({ path: posixRel, backupPath, originalHash: await fileHash(backupPath) });
         }
         if (!itemLog.generatedFiles.includes(posixRel)) itemLog.generatedFiles.push(posixRel);
         if (!this.log.generatedFiles.includes(posixRel)) this.log.generatedFiles.push(posixRel);
+        // Persist the intended bytes before publication, including sequential/copy jobs.
+        itemLog.outputHashes[posixRel] = await fileHash(stagedPath);
         await this.checkpoint();
-        if (stagedPath) await publishStagedImage(stagedPath, outputPath);
-        else await convertImage(inputPath, outputPath, conversion);
-        itemLog.outputHashes[posixRel] = await fileHash(outputPath);
+        await publishStagedImage(stagedPath, outputPath);
         const outputStat = await fs.stat(outputPath);
         itemLog.outputBytes += outputStat.size;
         itemLog.outputFileCount += 1;

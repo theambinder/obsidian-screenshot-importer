@@ -230,7 +230,14 @@ async function rollbackItem(config, run, item, references, step = () => {}) {
       const replacement = (item.replacedFiles || []).find((entry) => entry.path === generated);
       if (replacement) await assertRealInside(path.join(config.backupsDir, runId), replacement.backupPath);
       if (await pathExists(filePath)) {
-        if (item.outputHashes?.[generated] && await fileHash(filePath) !== item.outputHashes[generated]) {
+        const currentHash = item.outputHashes?.[generated] || replacement?.originalHash ? await fileHash(filePath) : null;
+        if (replacement?.originalHash && currentHash === replacement.originalHash) {
+          // A crash can occur after recording intent but before publishing the overwrite.
+          result.restoredFiles.push(generated);
+          await checkpoint();
+          continue;
+        }
+        if (item.outputHashes?.[generated] && currentHash !== item.outputHashes[generated]) {
           throw new Error('Attachment changed after import; kept the current file');
         }
         if (!replacement && [...references.values()].some((content) => content.includes(path.basename(generated)))) {

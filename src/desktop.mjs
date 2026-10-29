@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { createAppServer } from './server.mjs';
 import { desktopSupportRoot, loadDesktopConfig } from './desktopConfig.mjs';
 import { UpdateManager } from './updates.mjs';
+import { recoverInterruptedImports } from './importRecovery.mjs';
 
 const supportRoot = desktopSupportRoot();
 const profilePath = process.env.OBSIDIAN_SCREENSHOTS_PROFILE || path.join(supportRoot, 'locations.json');
@@ -65,7 +66,8 @@ async function acquireLock(dataDir) {
 try {
   const config = await loadDesktopConfig(profilePath);
   releaseLock = await acquireLock(config.dataDir);
-  server = createAppServer(config, { updater: new UpdateManager(path.join(supportRoot, 'updates')) });
+  const recoveredRuns = await recoverInterruptedImports(config);
+  server = createAppServer(config, { updater: new UpdateManager(path.join(supportRoot, 'updates')), recoveredRuns });
   const input = readline.createInterface({ input: process.stdin });
   input.on('line', (line) => {
     try {

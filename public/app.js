@@ -11,6 +11,7 @@ import { createPreviewImageLoader } from './previewImages.js';
 import { newTabNoteUri } from './obsidianUri.js';
 import { bindQualityInput } from './qualityInput.js';
 import { firstReturnedFolder } from './reportNavigation.js';
+import { decorateSelects } from './controlArrows.js';
 
 const state = {
   config: null,
@@ -115,6 +116,7 @@ const els = {
   qualityDefaultsFields: $('#qualityDefaultsFields'),
   refreshRunsButton: $('#refreshRunsButton'),
   runButton: $('#runButton'),
+  stopRunButton: $('#stopRunButton'),
   runsList: $('#runsList'),
   runsSummary: $('#runsSummary'),
   scanButton: $('#scanButton'),
@@ -160,6 +162,21 @@ if (window.webkit?.messageHandlers?.locations) {
 }
 els.scanButton.addEventListener('click', () => scan().catch(showFatal));
 els.runButton.addEventListener('click', () => runSelected().catch(showFatal));
+els.stopRunButton.addEventListener('click', async () => {
+  const jobId = state.activeJobId;
+  if (!jobId) return;
+  els.stopRunButton.disabled = true;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(jobId)}/stop`, { method: 'POST', body: '{}' });
+    els.stopRunButton.textContent = 'Stopping…';
+  } catch (error) {
+    if (state.activeJobId === jobId) {
+      if (error.status !== 409) setStatusText(error.message);
+      els.stopRunButton.disabled = false;
+    }
+  }
+});
+$('#dismissRecoveryButton').addEventListener('click', () => { $('#recoveryNotice').hidden = true; });
 els.selectAllButton.addEventListener('click', () => setAllEnabled(true));
 els.toggleMatchedButton.addEventListener('click', () => setMatchedEnabled(true));
 els.clearSelectionButton.addEventListener('click', () => setAllEnabled(false));
@@ -303,6 +320,7 @@ const updates = createUpdates({
 });
 
 async function initialize() {
+  decorateSelects();
   await loadSettings();
   await updates.restore();
   const { job } = await api('/api/active-job');
@@ -314,6 +332,16 @@ async function initialize() {
     scan({ preserveProgress: Boolean(job) }),
     loadRuns(),
   ]);
+  const { recoveredRuns } = await api('/api/recovery');
+  if (recoveredRuns.length) {
+    $('#recoveryNotice').hidden = false;
+    $('#reviewRecoveryButton').addEventListener('click', () => {
+      state.openRunIds.add(recoveredRuns[0]);
+      state.historyFocusRunId = recoveredRuns[0];
+      setTab('history');
+      focusHistoryRun();
+    });
+  }
 }
 
 async function api(path, options = {}) {
@@ -710,7 +738,13 @@ function renderFolderRows() {
         </select>` : ''}
       </td>
       <td class="quality-cell">
-        <input class="row-quality-input" type="number" min="1" max="100" value="${escapeAttr(qualityValue(folder))}" aria-label="Quality for ${escapeAttr(folder.name)}" title="${escapeAttr(qualityTitle(folder))}">
+        <span class="quality-control">
+          <input class="row-quality-input" type="number" min="1" max="100" value="${escapeAttr(qualityValue(folder))}" aria-label="Quality for ${escapeAttr(folder.name)}" title="${escapeAttr(qualityTitle(folder))}">
+          <span class="quality-steps">
+            <button class="quality-up" type="button" tabindex="-1" aria-label="Increase Quality for ${escapeAttr(folder.name)}" title="Increase Quality"></button>
+            <button class="quality-down" type="button" tabindex="-1" aria-label="Decrease Quality for ${escapeAttr(folder.name)}" title="Decrease Quality"></button>
+          </span>
+        </span>
       </td>
       <td class="resolution-cell">
         <select class="row-resolution" aria-label="Resolution for ${escapeAttr(folder.name)}">
@@ -759,6 +793,8 @@ function renderFolderRows() {
     bindQualityInput(rowQualityInput, {
       fallback: () => defaultQualityForFolder(folder),
       apply: (quality) => updateFolderQuality(folder, quality, rowQualityInput),
+      increaseButton: tr.querySelector('.quality-up'),
+      decreaseButton: tr.querySelector('.quality-down'),
     });
     tr.querySelector('.row-resolution').addEventListener('change', (event) => {
       setFolderEncodingGroup(folder, { resolution: event.target.value });
@@ -820,6 +856,7 @@ function renderFolderRows() {
         chooseNote(folder, button.dataset.notePath).then(() => renderFolders()).catch(showFatal);
       });
     }
+    decorateSelects(tr);
     els.foldersBody.append(tr);
   });
   observeEstimateRows();
@@ -1516,12 +1553,12 @@ function pollJob(jobId) {
       return;
     }
     setProgress(job);
-    if (['done', 'partial', 'error'].includes(job.status)) {
+    if (['done', 'partial', 'error', 'stopped'].includes(job.status)) {
       state.jobTimer = null;
+      setProgress({ status: 'ready' });
       try {
         await loadRuns();
         await scan({ preserveProgress: true });
-        setProgress(job);
         if (job.kind === 'rollback' && job.result) {
           const result = job.sourceFolderName ? {
             ...job.result,
@@ -1529,7 +1566,7 @@ function pollJob(jobId) {
             restoredNotes: job.result.removedMarkdownBlock ? [job.sourceFolderName] : [],
           } : job.result;
           showRollbackModal({ runId: job.runId }, result);
-        } else if (job.kind !== 'rollback') showDoneModal(job.results || [], job.runId || job.id || jobId);
+        } else if (job.kind !== 'rollback') showDoneModal(job.results || [], job.runId || job.id || jobId, job);
         if (job.error) setStatusText(job.error);
       } catch (error) {
         setStatusText(`Operation ${job.status}; refresh failed: ${error.message}`);
@@ -1545,6 +1582,10 @@ function pollJob(jobId) {
 }
 
 function setProgress(job) {
+  els.stopRunButton.hidden = job.kind !== 'import' || !['queued', 'running'].includes(job.status);
+  els.runButton.hidden = !els.stopRunButton.hidden;
+  els.stopRunButton.disabled = Boolean(job.stopRequested);
+  els.stopRunButton.innerHTML = `<span class="ui-icon icon-stop" aria-hidden="true"></span>${job.stopRequested ? 'Stopping…' : 'Stop'}`;
   const percent = job.percent || 0;
   els.progressFill.style.width = `${percent}%`;
   if (job.status === 'ready') {
@@ -1552,13 +1593,13 @@ function setProgress(job) {
     els.currentText.textContent = 'Select folders and press Run to start';
     return;
   }
-  const eta = job.etaSeconds == null ? '' : ` · ETA ${formatDuration(job.etaSeconds)}`;
+  const eta = job.etaSeconds == null || job.stopRequested ? '' : ` · ETA ${formatDuration(job.etaSeconds)}`;
   const unit = job.kind === 'rollback' ? ' steps' : '';
   els.progressText.textContent = `${formatCount(job.doneFiles || 0)}/${formatCount(job.totalFiles || 0)}${unit} · ${percent}%${eta}`;
-  els.currentText.textContent = job.error || job.current || '';
+  els.currentText.textContent = job.error || `${job.stopRequested ? 'Stopping after current folder · ' : ''}${job.current || ''}`;
 }
 
-function showDoneModal(results, runId) {
+function showDoneModal(results, runId, job = {}) {
   state.doneRunId = runId || null;
   state.doneDestination = 'history';
   state.doneReturnedFolders = [];
@@ -1566,12 +1607,13 @@ function showDoneModal(results, runId) {
   els.doneTitle.textContent = 'Done';
   const successful = results.filter((result) => result.status === 'done');
   const failed = results.filter((result) => result.status !== 'done');
-  els.doneTitle.textContent = failed.length ? 'Completed with errors' : 'Done';
+  els.doneTitle.textContent = job.status === 'stopped' ? 'Stopped' : failed.length ? 'Completed with errors' : 'Done';
   const total = summarizeResults(successful);
   els.doneSummary.innerHTML = `
     <strong>${formatUnit(total.works, 'work')} · ${formatUnit(total.screenshots, 'screenshot')}</strong>
     <span>${formatSizePair(total.sourceBytes, total.outputBytes)}</span>
     ${failed.length ? `<span class="report-errors">${formatCount(failed.length)} failed</span>` : ''}
+    ${job.status === 'stopped' ? `<span>${formatUnit(job.remainingFolders || 0, 'folder')} not started</span>` : ''}
   `;
   els.doneModalBody.innerHTML = `
     <div class="modal-items">
@@ -1648,8 +1690,8 @@ function focusHistoryRun() {
   card.querySelector('.run-items').hidden = false;
   const toggle = card.querySelector('.run-toggle');
   toggle.setAttribute('aria-expanded', 'true');
-  toggle.textContent = '▾';
   toggle.title = 'Collapse run';
+  toggle.setAttribute('aria-label', toggle.title);
   card.scrollIntoView({ block: 'start' });
   state.historyFocusRunId = null;
 }
@@ -1678,7 +1720,7 @@ function renderRuns(data) {
     const isOpen = state.openRunIds.has(run.runId);
     card.innerHTML = `
       <div class="run-head">
-        <button class="icon-button run-toggle" type="button" aria-expanded="${isOpen ? 'true' : 'false'}" title="${isOpen ? 'Collapse run' : 'Expand run'}">${isOpen ? '▾' : '▸'}</button>
+        <button class="icon-button run-toggle" type="button" aria-expanded="${isOpen ? 'true' : 'false'}" aria-label="${isOpen ? 'Collapse run' : 'Expand run'}" title="${isOpen ? 'Collapse run' : 'Expand run'}"></button>
         <div class="run-summary-block">
           <div class="run-title">${escapeHtml(formatRunTitle(run))}</div>
           <div class="run-meta">${escapeHtml(formatRunMeta(run))}</div>
@@ -1701,8 +1743,8 @@ function renderRuns(data) {
       card.querySelector('.run-items').hidden = !expanded;
       const toggle = card.querySelector('.run-toggle');
       toggle.setAttribute('aria-expanded', String(expanded));
-      toggle.textContent = expanded ? '▾' : '▸';
       toggle.title = expanded ? 'Collapse run' : 'Expand run';
+      toggle.setAttribute('aria-label', toggle.title);
     });
     card.querySelector('.rollback-run')?.addEventListener('click', async () => {
       if (state.busy) return;
@@ -1911,6 +1953,8 @@ function formatRunStatus(run) {
   if (kind === 'rollback') return 'Rollbacked';
   if (kind === 'trash') return 'Trashed';
   if (run.status === 'done') return 'Done';
+  if (run.status === 'stopped') return 'Stopped';
+  if (run.status === 'interrupted' || run.status === 'running') return 'Interrupted';
   return run.status || 'Done';
 }
 
@@ -1952,7 +1996,7 @@ function statusKind(status) {
   if (value === 'rollback:partial' || value === 'rollback:running') return 'partial';
   if (value.startsWith('rollback:')) return 'rollback';
   if (value.startsWith('trash:')) return 'trash';
-  if (['error', 'partial', 'running'].includes(value)) return value;
+  if (['error', 'partial', 'running', 'interrupted', 'stopped'].includes(value)) return value;
   return 'done';
 }
 
@@ -1961,7 +2005,8 @@ function statusLabel(kind) {
   if (kind === 'trash') return 'Trashed';
   if (kind === 'error') return 'Failed';
   if (kind === 'partial') return 'Partial';
-  if (kind === 'running') return 'Interrupted';
+  if (kind === 'running' || kind === 'interrupted') return 'Interrupted';
+  if (kind === 'stopped') return 'Stopped';
   return 'Done';
 }
 

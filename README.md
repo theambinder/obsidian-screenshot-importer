@@ -61,6 +61,25 @@ See [PORTABLE-APP.md](PORTABLE-APP.md) for installation and transfer details.
   Each section remembers its own scroll position during the session.
 - Preserve note creation dates on macOS while updating modification dates.
 
+## Run Control and Recovery
+
+During import, **Stop** replaces Run. It finishes the current folder, including its
+note edit, archive move, and journal, then leaves the remaining folders untouched.
+The Stopped report shows completed work and the number of folders not started.
+Completed folders can be rolled back individually or together from History after
+stopping has finished. Stop is not an immediate encoder kill or an automatic rollback;
+a large current folder can take time. A separate pause/resume mode is not provided.
+Successful completion clears the progress bar; results remain in the report and History.
+
+Normal quit waits for the active operation. If only the native window/host crashes,
+the owned backend finishes its active operation before exiting. If the backend itself
+is forcibly terminated, the next launch marks unfinished imports **Interrupted** and
+offers History for inspection/rollback; it does not silently restart them. Originals,
+note backups, overwrite backups, and recorded output hashes remain available.
+Keep archives until results are checked, and roll back affected folders before retrying.
+No application can guarantee recovery from filesystem corruption, power loss, or
+incomplete cloud synchronization; external backups remain necessary.
+
 ## Folder Layout
 
 Source images must be inside subfolders of the selected screenshots root. Folder

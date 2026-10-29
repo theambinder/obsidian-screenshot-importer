@@ -249,3 +249,84 @@ test('portable bundle converts all formats and finishes an import before shutdow
   const orphanLog = JSON.parse(await fs.readFile(path.join(f.locations.dataDir, 'runs', `${lastJob.jobId}.json`)));
   assert.equal(orphanLog.status, 'done');
 });
+
+for (const phase of ['intent', 'published', 'archive-intent', 'archive-renamed']) {
+  test(`SIGKILL at ${phase} retains originals and allows journal recovery/rollback after desktop restart`, { timeout: 30000 }, async (t) => {
+    const f = await fixture(t);
+    const config = resolveConfig(f.locations);
+    const folder = path.join(config.screenshotsRoot, 'Show');
+    const output = path.join(config.vaultRoot, 'All Notes/Attachments/Show');
+    await fs.mkdir(folder);
+    await fs.mkdir(output, { recursive: true });
+    for (let n = 0; n < 2; n++) await fs.writeFile(path.join(folder, `capture-${n}.png`), `original capture ${n}`);
+    const overwritten = path.join(output, 'capture-0.png');
+    await fs.writeFile(overwritten, 'attachment before import');
+    const code = `
+      import { ImportJob } from ${JSON.stringify(new URL('../src/runner.mjs', import.meta.url).href)};
+      const [config, phase] = [JSON.parse(process.argv[1]), process.argv[2]];
+      class CrashPoint extends ImportJob {
+        async block() { setInterval(() => {}, 1000); process.send({ id: this.id }); await new Promise(() => {}); }
+        async checkpoint() {
+          await super.checkpoint();
+          const item = this.log.items[0];
+          if (phase === 'intent' && Object.keys(item?.outputHashes || {}).length && !item.outputFileCount) await this.block();
+          if (phase === 'published' && item?.outputFileCount === 1) await this.block();
+          if (phase === 'archive-intent' && this.log.archivedFolders.length) await this.block();
+        }
+        async archiveSourceFolder(...args) {
+          const result = await super.archiveSourceFolder(...args);
+          if (phase === 'archive-renamed') await this.block();
+          return result;
+        }
+      }
+      await new CrashPoint(config, { items: [{ sourceFolderName: 'Show', notePath: 'Media/Series/Show.md', mode: 'screenshots' }], conversion: { format: 'original', conflictPolicy: 'overwrite' }, parallelImages: 1 }).run();
+    `;
+    const worker = spawn(process.execPath, ['--input-type=module', '-e', code, JSON.stringify(config), phase], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    let stderr = '';
+    worker.stderr.on('data', (chunk) => { stderr += chunk; });
+    const exited = once(worker, 'exit');
+    t.after(async () => { if (worker.exitCode === null && worker.signalCode === null) { worker.kill('SIGKILL'); await exited; } });
+    const [{ id }] = await once(worker, 'message', { signal: AbortSignal.timeout(15000) }).catch((error) => { throw new Error(`${error.message}: ${stderr}`); });
+    worker.kill('SIGKILL');
+    assert.equal((await exited)[1], 'SIGKILL');
+    const desktop = startDesktop(t, f, false);
+    const { url } = await desktop.message('ready');
+    const recovery = await (await fetch(`${url}/api/recovery`)).json();
+    assert.deepEqual(recovery.recoveredRuns, [id]);
+    assert.equal((await (await fetch(`${url}/api/active-job`)).json()).job, null);
+    const log = JSON.parse(await fs.readFile(path.join(config.runsDir, `${id}.json`)));
+    assert.equal(log.status, 'interrupted');
+    assert.equal(log.items[0].status, 'interrupted');
+    assert.ok(log.items[0].outputHashes['All Notes/Attachments/Show/capture-0.png']);
+    const response = await fetch(`${url}/api/rollback`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: id }) });
+    const result = await response.json();
+    assert.equal(result.status, 'done', JSON.stringify(result));
+    for (let n = 0; n < 2; n++) assert.equal(await fs.readFile(path.join(folder, `capture-${n}.png`), 'utf8'), `original capture ${n}`);
+    assert.equal(await fs.readFile(overwritten, 'utf8'), 'attachment before import');
+    assert.deepEqual(await fs.readdir(output), ['capture-0.png']);
+    const note = await fs.readFile(path.join(config.mediaRoot, 'Series/Show.md'), 'utf8');
+    assert.match(note, /Personal notes/);
+    assert.doesNotMatch(note, /!\[\[/);
+    desktop.child.stdin.end();
+    assert.equal((await desktop.exited)[0], 0);
+  });
+}
+
+test('SIGTERM during an active desktop import waits for complete journal/archives before exit', { timeout: 30000 }, async (t) => {
+  const f = await fixture(t);
+  const folder = path.join(f.locations.screenshotsRoot, 'Show');
+  await fs.mkdir(folder);
+  for (let n = 0; n < 40; n++) await fs.writeFile(path.join(folder, `capture-${n}.png`), `capture ${n}`);
+  const desktop = startDesktop(t, f, false);
+  const { url } = await desktop.message('ready');
+  const response = await fetch(`${url}/api/run`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [{ sourceFolderName: 'Show', notePath: 'Media/Series/Show.md', mode: 'screenshots' }], conversion: { format: 'original' } }) });
+  const { jobId } = await response.json();
+  desktop.child.kill('SIGTERM');
+  assert.equal((await desktop.message('stopping')).busy, true);
+  assert.equal((await desktop.exited)[0], 0);
+  const log = JSON.parse(await fs.readFile(path.join(f.locations.dataDir, 'runs', `${jobId}.json`)));
+  assert.equal(log.status, 'done');
+  assert.equal(log.items[0].status, 'done');
+  assert.ok(log.finishedAt);
+  assert.equal((await fs.readdir(log.items[0].archivedTo)).length, 40);
+});

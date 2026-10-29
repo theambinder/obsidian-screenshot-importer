@@ -20,12 +20,6 @@ export function resolveParallelImages(value, cpuCount = os.availableParallelism(
 // Only encoding runs concurrently. The caller publishes files and journals in order.
 export async function* prepareImages(sourceDir, images, outputDir, settings, workers) {
   const width = settings.format === 'original' ? 1 : Math.min(workers, images.length, images.some(isJxr) ? 2 : 4);
-  if (width <= 1) {
-    for (const image of images) {
-      yield { image, inputStat: await fs.stat(path.join(sourceDir, image)), stagedPath: null };
-    }
-    return;
-  }
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'iina-batch-'));
   try {
     for (let offset = 0; offset < images.length; offset += width) {
